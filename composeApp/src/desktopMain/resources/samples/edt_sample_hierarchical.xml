@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Esempio anonimizzato di file XML con struttura gerarchica
+    I nodi Classe contengono direttamente i Docenti assegnati
+-->
+<CONSIGLI_DI_CLASSE>
+  <CLASSE Nome="3A">
+    <DOCENTI>
+      <DOCENTE Nome="Mario Rossi" Email="mario.rossi@scuola.edu.it" />
+      <DOCENTE Nome="Luigi Bianchi" Email="luigi.bianchi@scuola.edu.it" />
+    </DOCENTI>
+  </CLASSE>
+  <CLASSE Nome="4B">
+    <DOCENTI>
+      <DOCENTE Nome="Anna Verdi" Email="anna.verdi@scuola.edu.it" />
+      <DOCENTE Nome="Giulia Ferrari" Email="giulia.ferrari@scuola.edu.it" />
+    </DOCENTI>
+  </CLASSE>
+  <CLASSE Nome="5C">
+    <DOCENTI>
+      <DOCENTE Nome="Antonio Esposito" Email="antonio.esposito@scuola.edu.it" />
+      <DOCENTE Nome="Mario Rossi" Email="mario.rossi@scuola.edu.it" />
+    </DOCENTI>
+  </CLASSE>
+</CONSIGLI_DI_CLASSE>

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Esempio anonimizzato di file XML esportato da EDT (Index Éducation)
+    Formato standard relazionale con tabelle separate per Docenti, Classi e Corsi
+-->
+<EDT xmlns="http://www.index-education.com/edt">
+  <DOCENTI>
+    <DOCENTE Id="DOC001" Cognome="Rossi" Nome="Mario" Email="mario.rossi@scuola.edu.it" />
+    <DOCENTE Id="DOC002" Cognome="Bianchi" Nome="Luigi" Email="luigi.bianchi@scuola.edu.it" />
+    <DOCENTE Id="DOC003" Cognome="Verdi" Nome="Anna" Email="anna.verdi@scuola.edu.it" />
+    <DOCENTE Id="DOC004" Cognome="Ferrari" Nome="Giulia" Email="giulia.ferrari@scuola.edu.it" />
+    <DOCENTE Id="DOC005" Cognome="Esposito" Nome="Antonio" Email="antonio.esposito@scuola.edu.it" />
+  </DOCENTI>
+
+  <CLASSES>
+    <CLASSE Id="CLS01" Nom="1A" />
+    <CLASSE Id="CLS02" Nom="1B" />
+    <CLASSE Id="CLS03" Nom="2A" />
+  </CLASSES>
+
+  <COURS>
+    <!-- Lezioni per 1A -->
+    <COUR Id="C001">
+      <CLASSE Id="CLS01" />
+      <DOCENTE Id="DOC001" />
+    </COUR>
+    <COUR Id="C002">
+      <CLASSE Id="CLS01" />
+      <DOCENTE Id="DOC002" />
+    </COUR>
+    <COUR Id="C003">
+      <CLASSE Id="CLS01" />
+      <DOCENTE Id="DOC003" />
+    </COUR>
+
+    <!-- Lezioni per 1B -->
+    <COUR Id="C004">
+      <CLASSE Id="CLS02" />
+      <DOCENTE Id="DOC002" />
+    </COUR>
+    <COUR Id="C005">
+      <CLASSE Id="CLS02" />
+      <DOCENTE Id="DOC004" />
+    </COUR>
+
+    <!-- Lezioni per 2A -->
+    <COUR Id="C006">
+      <CLASSE Id="CLS03" />
+      <DOCENTE Id="DOC001" />
+    </COUR>
+    <COUR Id="C007">
+      <CLASSE Id="CLS03" />
+      <DOCENTE Id="DOC005" />
+    </COUR>
+  </COURS>
+</EDT>

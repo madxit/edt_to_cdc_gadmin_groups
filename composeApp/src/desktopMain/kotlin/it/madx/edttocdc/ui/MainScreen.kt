@@ -5,6 +5,7 @@ import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.defaultScrollbarStyle
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -214,30 +215,6 @@ fun MainScreen(viewModel: MainViewModel) {
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = viewModel.settings.schoolDomain,
-                                onValueChange = { viewModel.updateSettings(viewModel.settings.copy(schoolDomain = it.trim())) },
-                                label = { Text("Dominio scuola") },
-                                placeholder = { Text("scuola.edu.it") },
-                                singleLine = true,
-                                enabled = !viewModel.isRunning,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            OutlinedTextField(
-                                value = viewModel.settings.adminEmail,
-                                onValueChange = { viewModel.updateSettings(viewModel.settings.copy(adminEmail = it.trim())) },
-                                label = { Text("Email Amministratore (DWD)") },
-                                placeholder = { Text("admin@scuola.edu.it") },
-                                singleLine = true,
-                                enabled = !viewModel.isRunning,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -246,8 +223,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             Button(
                                 onClick = { viewModel.testGoogleConnection() },
                                 enabled = !viewModel.isRunning &&
-                                    viewModel.settings.googleCredentialsPath.isNotBlank() &&
-                                    viewModel.settings.schoolDomain.isNotBlank()
+                                    viewModel.settings.googleCredentialsPath.isNotBlank()
                             ) {
                                 Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
@@ -464,20 +440,31 @@ fun MainScreen(viewModel: MainViewModel) {
                                     }
                                 }
 
+                                val scrollbarStyle = defaultScrollbarStyle().copy(
+                                    unhoverColor = Color(0xFF64748B),
+                                    hoverColor = Color(0xFF60A5FA),
+                                    shape = RoundedCornerShape(4.dp),
+                                    thickness = 8.dp
+                                )
+
                                 HorizontalScrollbar(
                                     modifier = Modifier
                                         .align(Alignment.BottomStart)
                                         .fillMaxWidth()
-                                        .padding(end = 12.dp),
-                                    adapter = rememberScrollbarAdapter(horizontalScrollState)
+                                        .padding(end = 12.dp)
+                                        .background(Color(0xFF1E2430), RoundedCornerShape(4.dp)),
+                                    adapter = rememberScrollbarAdapter(horizontalScrollState),
+                                    style = scrollbarStyle
                                 )
 
                                 VerticalScrollbar(
                                     modifier = Modifier
                                         .align(Alignment.CenterEnd)
                                         .fillMaxHeight()
-                                        .padding(bottom = 12.dp),
-                                    adapter = rememberScrollbarAdapter(listState)
+                                        .padding(bottom = 12.dp)
+                                        .background(Color(0xFF1E2430), RoundedCornerShape(4.dp)),
+                                    adapter = rememberScrollbarAdapter(listState),
+                                    style = scrollbarStyle
                                 )
                             }
                         }

@@ -12,10 +12,10 @@ class SettingsManagerTest {
 
     @Test
     fun testValidateSettingsErrors() {
-        // Impostazioni completamente vuote
+        // Impostazioni completamente vuote (mancano URL e credenziali)
         val emptySettings = AppSettings()
         val errors = emptySettings.validate()
-        assertTrue(errors.size >= 3)
+        assertTrue(errors.size >= 2)
 
         // URL non HTTP/HTTPS
         val invalidUrlSettings = AppSettings(

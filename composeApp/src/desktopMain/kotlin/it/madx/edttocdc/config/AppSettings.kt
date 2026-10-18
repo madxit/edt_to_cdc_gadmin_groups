@@ -38,10 +38,10 @@ data class AppSettings(
             errors.add("Il percorso del file di credenziali Google non è specificato.")
         }
 
-        if (schoolDomain.isBlank()) {
-            errors.add("Il dominio della scuola (es. istituto.edu.it) non è specificato.")
-        } else if (!schoolDomain.contains(".") || schoolDomain.startsWith("@")) {
-            errors.add("Il formato del dominio della scuola non è valido (es. istituto.edu.it).")
+        if (schoolDomain.isNotBlank()) {
+            if (!schoolDomain.contains(".") || schoolDomain.startsWith("@")) {
+                errors.add("Il formato del dominio della scuola non è valido (es. istituto.edu.it).")
+            }
         }
 
         if (adminEmail.isNotBlank()) {

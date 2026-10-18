@@ -114,8 +114,23 @@ object SyncEngine {
             return SyncSummary(0, 0, 0, 0, 0, 0, 0, listOf(msg), dryRun, false)
         }
 
+        val detectedDomain = ClassGroupMapper.detectDominantDomain(parsedClasses)
+        val activeDomain = settings.schoolDomain.ifBlank {
+            detectedDomain ?: settings.adminEmail.substringAfter('@', "").ifBlank { "" }
+        }
+
+        if (activeDomain.isBlank()) {
+            val msg = "Impossibile determinare il dominio della scuola: nessuna email presente nel file EDT né specificata nelle impostazioni."
+            log(LogLevel.ERROR, msg, onLog)
+            return SyncSummary(0, 0, 0, 0, 0, 0, 0, listOf(msg), dryRun, false)
+        }
+
+        if (settings.schoolDomain.isBlank()) {
+            log(LogLevel.INFO, "Dominio scuola ricavato automaticamente da EDT: $activeDomain", onLog)
+        }
+
         val classEmailMap = ClassGroupMapper.buildClassEmailMap(parsedClasses)
-        val groupEmailMap = ClassGroupMapper.buildGroupEmailMap(classEmailMap, settings.schoolDomain)
+        val groupEmailMap = ClassGroupMapper.buildGroupEmailMap(classEmailMap, activeDomain)
         val distinctEmails = classEmailMap.values.flatten().toSet()
 
         log(LogLevel.SUCCESS, "Individuate ${classEmailMap.size} classi distinte.", onLog)
@@ -135,19 +150,19 @@ object SyncEngine {
         }
 
         // Convalida formale degli indirizzi generati
-        val anomalies = ClassGroupMapper.validateGroupEmailMap(groupEmailMap, settings.schoolDomain).toMutableList()
+        val anomalies = ClassGroupMapper.validateGroupEmailMap(groupEmailMap, activeDomain).toMutableList()
         for (anomaly in anomalies) {
             log(LogLevel.WARNING, anomaly, onLog)
         }
 
         // FASE 4: Inizializzazione del Client Google Workspace e test di connessione
         onProgress("Connessione a Google Workspace", 3, 5)
-        log(LogLevel.INFO, "Autenticazione con Google Workspace (dominio: ${settings.schoolDomain})...", onLog)
+        log(LogLevel.INFO, "Autenticazione con Google Workspace (dominio: $activeDomain)...", onLog)
 
         val googleClient = try {
             GoogleWorkspaceClient(
                 credentialsFile = credentialsFile,
-                domain = settings.schoolDomain,
+                domain = activeDomain,
                 adminEmail = settings.adminEmail.ifBlank { null }
             )
         } catch (e: Exception) {

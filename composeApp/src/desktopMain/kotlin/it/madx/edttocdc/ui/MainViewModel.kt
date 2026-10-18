@@ -85,12 +85,18 @@ class MainViewModel(private val scope: CoroutineScope) {
                 progressStage = "Pronto"
                 if (result.isSuccess) {
                     val info = result.getOrThrow()
+                    val detectedDomain = ClassGroupMapper.detectDominantDomain(info.parsedClasses)
+                    if (detectedDomain != null) {
+                        updateSettings(settings.copy(schoolDomain = detectedDomain))
+                        addLog(LogLevel.SUCCESS, "Dominio scuola ricavato dal file EDT: $detectedDomain")
+                    }
+
                     addLog(
                         LogLevel.SUCCESS,
                         "Verifica EDT riuscita: XML scaricato (${info.sizeBytes} byte) ed estratte ${info.detectedClassesCount} classi."
                     )
                     if (logGroupsDetails) {
-                        val domain = settings.schoolDomain.ifBlank { "dominio.scuola" }
+                        val domain = settings.schoolDomain.ifBlank { detectedDomain ?: "dominio.scuola" }
                         val classEmailMap = ClassGroupMapper.buildClassEmailMap(info.parsedClasses)
                         val groupEmailMap = ClassGroupMapper.buildGroupEmailMap(classEmailMap, domain)
                         for ((groupEmail, emails) in groupEmailMap) {
@@ -133,11 +139,26 @@ class MainViewModel(private val scope: CoroutineScope) {
                 return@launch
             }
 
+            val effectiveDomain = settings.schoolDomain.ifBlank {
+                settings.adminEmail.substringAfter('@', "").ifBlank { null }
+            }
+            if (effectiveDomain.isNullOrBlank()) {
+                withContext(Dispatchers.Main) {
+                    isRunning = false
+                    progressStage = "Pronto"
+                    addLog(
+                        LogLevel.ERROR,
+                        "Dominio scuola non disponibile: verificare prima il file XML EDT o inserire l'email dell'amministratore."
+                    )
+                }
+                return@launch
+            }
+
             val credentialsFile = credResult.getOrThrow()
             val result = runCatching {
                 val client = GoogleWorkspaceClient(
                     credentialsFile = credentialsFile,
-                    domain = settings.schoolDomain,
+                    domain = effectiveDomain,
                     adminEmail = settings.adminEmail.ifBlank { null }
                 )
                 client.testConnection().getOrThrow()

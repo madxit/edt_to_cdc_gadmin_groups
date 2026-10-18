@@ -148,4 +148,20 @@ object ClassGroupMapper {
 
         return anomalies
     }
+
+    /**
+     * Rileva automaticamente il dominio istituzionale prevalente dall'elenco delle classi e docenti EDT.
+     * Estrae la parte successiva alla '@' di ogni email docente e restituisce il dominio con più occorrenze.
+     */
+    fun detectDominantDomain(classTeacherData: List<ClassTeacherData>): String? {
+        val domains = classTeacherData.flatMap { it.teacherEmails }
+            .mapNotNull { email ->
+                val at = email.indexOf('@')
+                if (at != -1 && at < email.length - 1) {
+                    email.substring(at + 1).trim().lowercase()
+                } else null
+            }
+        if (domains.isEmpty()) return null
+        return domains.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+    }
 }

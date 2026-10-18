@@ -94,4 +94,15 @@ class ClassGroupMapperTest {
         val anomalies = ClassGroupMapper.validateGroupEmailMap(invalidMap, domain)
         assertEquals(2, anomalies.size)
     }
+
+    @Test
+    fun testDetectDominantDomain() {
+        val classes = listOf(
+            ClassTeacherData("1A", setOf("mario@liceo.edu.it", "luigi@liceo.edu.it")),
+            ClassTeacherData("2B", setOf("anna@liceo.edu.it", "esterno@gmail.com")),
+            ClassTeacherData("3C", setOf("giulia@liceo.edu.it"))
+        )
+        val detected = ClassGroupMapper.detectDominantDomain(classes)
+        assertEquals("liceo.edu.it", detected)
+    }
 }

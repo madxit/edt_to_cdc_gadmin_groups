@@ -1,56 +1,189 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Esempio anonimizzato di file XML esportato da EDT (Index Éducation)
-    Formato standard relazionale con tabelle separate per Docenti, Classi e Corsi
+    Esempio reale e anonimizzato di file XML esportato da EDT (Index Éducation)
+    Formato: ExportIndexPartenaireV3.3
+    Tutti i dati sensibili sono stati rimossi e sostituiti manualmente con nomi, classi ed email di fantasia.
 -->
-<EDT xmlns="http://www.index-education.com/edt">
-  <DOCENTI>
-    <DOCENTE Id="DOC001" Cognome="Rossi" Nome="Mario" Email="mario.rossi@scuola.edu.it" />
-    <DOCENTE Id="DOC002" Cognome="Bianchi" Nome="Luigi" Email="luigi.bianchi@scuola.edu.it" />
-    <DOCENTE Id="DOC003" Cognome="Verdi" Nome="Anna" Email="anna.verdi@scuola.edu.it" />
-    <DOCENTE Id="DOC004" Cognome="Ferrari" Nome="Giulia" Email="giulia.ferrari@scuola.edu.it" />
-    <DOCENTE Id="DOC005" Cognome="Esposito" Nome="Antonio" Email="antonio.esposito@scuola.edu.it" />
-  </DOCENTI>
+<Export xmlns="http://www.index-education.com/exportindexpartenaireV3.3" Version="3.3">
+	<Etablissements>
+		<Etablissement Ident="1" Numero="SCUOLA001" Nom="Liceo Statale XYZ" Ville="Roma" Pays="Italia"/>
+	</Etablissements>
 
-  <CLASSES>
-    <CLASSE Id="CLS01" Nom="1A" />
-    <CLASSE Id="CLS02" Nom="1B" />
-    <CLASSE Id="CLS03" Nom="2A" />
-  </CLASSES>
+	<Matieres>
+		<Matiere Ident="1" Libelle="ITALIANO" Code="ITA"/>
+		<Matiere Ident="2" Libelle="MATEMATICA" Code="MAT"/>
+		<Matiere Ident="3" Libelle="INGLESE" Code="ING"/>
+		<Matiere Ident="4" Libelle="STORIA" Code="STO"/>
+		<Matiere Ident="5" Libelle="SCIENZE" Code="SCI"/>
+		<Matiere Ident="6" Libelle="FISICA" Code="FIS"/>
+		<Matiere Ident="7" Libelle="DISEGNO E ARTE" Code="ART"/>
+		<Matiere Ident="8" Libelle="SCIENZE MOTORIE" Code="SMO"/>
+		<Matiere Ident="9" Libelle="RELIGIONE" Code="REL"/>
+	</Matieres>
 
-  <COURS>
-    <!-- Lezioni per 1A -->
-    <COUR Id="C001">
-      <CLASSE Id="CLS01" />
-      <DOCENTE Id="DOC001" />
-    </COUR>
-    <COUR Id="C002">
-      <CLASSE Id="CLS01" />
-      <DOCENTE Id="DOC002" />
-    </COUR>
-    <COUR Id="C003">
-      <CLASSE Id="CLS01" />
-      <DOCENTE Id="DOC003" />
-    </COUR>
+	<Professeurs>
+		<Professeur Ident="1" Nom="Rossi" Prenom="Mario" EMail="mario.rossi@scuola.edu.it"/>
+		<Professeur Ident="2" Nom="Bianchi" Prenom="Luigi" EMail="luigi.bianchi@scuola.edu.it"/>
+		<Professeur Ident="3" Nom="Verdi" Prenom="Anna" EMail="anna.verdi@scuola.edu.it"/>
+		<Professeur Ident="4" Nom="Ferrari" Prenom="Giulia" EMail="giulia.ferrari@scuola.edu.it"/>
+		<Professeur Ident="5" Nom="Esposito" Prenom="Antonio" EMail="antonio.esposito@scuola.edu.it"/>
+		<Professeur Ident="6" Nom="Romano" Prenom="Marco" EMail="marco.romano@scuola.edu.it"/>
+		<Professeur Ident="7" Nom="Colombo" Prenom="Elena" EMail="elena.colombo@scuola.edu.it"/>
+		<Professeur Ident="8" Nom="Ricci" Prenom="Paolo" EMail="paolo.ricci@scuola.edu.it"/>
+		<Professeur Ident="9" Nom="Marino" Prenom="Chiara" EMail="chiara.marino@scuola.edu.it"/>
+		<Professeur Ident="10" Nom="Greco" Prenom="Davide" EMail="davide.greco@scuola.edu.it"/>
+		<Professeur Ident="11" Nom="Conti" Prenom="Silvia" EMail="silvia.conti@scuola.edu.it"/>
+		<Professeur Ident="12" Nom="De Luca" Prenom="Simone" EMail="simone.deluca@scuola.edu.it"/>
+		<Professeur Ident="13" Nom="Mancini" Prenom="Francesca" EMail="francesca.mancini@scuola.edu.it"/>
+		<Professeur Ident="14" Nom="Rizzo" Prenom="Giorgio" EMail="giorgio.rizzo@scuola.edu.it"/>
+		<Professeur Ident="15" Nom="Moretti" Prenom="Valeria" EMail="valeria.moretti@scuola.edu.it"/>
+	</Professeurs>
 
-    <!-- Lezioni per 1B -->
-    <COUR Id="C004">
-      <CLASSE Id="CLS02" />
-      <DOCENTE Id="DOC002" />
-    </COUR>
-    <COUR Id="C005">
-      <CLASSE Id="CLS02" />
-      <DOCENTE Id="DOC004" />
-    </COUR>
+	<Classes>
+		<Classe Ident="1" Nom="1A">
+			<ProfesseurPrincipal Ident="1"/>
+		</Classe>
+		<Classe Ident="2" Nom="1B">
+			<ProfesseurPrincipal Ident="3"/>
+			<PartieDeClasse Ident="1"/>
+		</Classe>
+		<Classe Ident="3" Nom="2A">
+			<ProfesseurPrincipal Ident="5"/>
+		</Classe>
+		<Classe Ident="4" Nom="2B">
+			<ProfesseurPrincipal Ident="8"/>
+		</Classe>
+		<Classe Ident="5" Nom="3A">
+			<ProfesseurPrincipal Ident="11"/>
+		</Classe>
+	</Classes>
 
-    <!-- Lezioni per 2A -->
-    <COUR Id="C006">
-      <CLASSE Id="CLS03" />
-      <DOCENTE Id="DOC001" />
-    </COUR>
-    <COUR Id="C007">
-      <CLASSE Id="CLS03" />
-      <DOCENTE Id="DOC005" />
-    </COUR>
-  </COURS>
-</EDT>
+	<PartiesDeClasses>
+		<PartieDeClasse Ident="1" Nom="1B_REL" LibellePartition="RELIGIONE"/>
+	</PartiesDeClasses>
+
+	<Groupes>
+		<Groupe Ident="1" Nom="GRP_1B_REL">
+			<PartieDeClasse Ident="1"/>
+		</Groupe>
+	</Groupes>
+
+	<Cours>
+		<!-- Lezioni Classe 1A -->
+		<Cours Jour="1" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="1"/>
+			<Professeur Ident="1"/>
+			<Classe Ident="1"/>
+		</Cours>
+		<Cours Jour="1" NumeroPlaceDebut="3" NombrePlaces="2">
+			<Matiere Ident="2"/>
+			<Professeur Ident="2"/>
+			<Classe Ident="1"/>
+		</Cours>
+		<Cours Jour="2" NumeroPlaceDebut="1" NombrePlaces="1">
+			<Matiere Ident="3"/>
+			<Professeur Ident="3"/>
+			<Classe Ident="1"/>
+		</Cours>
+		<Cours Jour="2" NumeroPlaceDebut="2" NombrePlaces="1">
+			<Matiere Ident="4"/>
+			<Professeur Ident="4"/>
+			<Classe Ident="1"/>
+		</Cours>
+		<Cours Jour="3" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="5"/>
+			<Professeur Ident="5"/>
+			<Classe Ident="1"/>
+		</Cours>
+		<Cours Jour="4" NumeroPlaceDebut="1" NombrePlaces="1">
+			<Matiere Ident="8"/>
+			<Professeur Ident="6"/>
+			<Classe Ident="1"/>
+		</Cours>
+
+		<!-- Lezioni Classe 1B -->
+		<Cours Jour="1" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="1"/>
+			<Professeur Ident="3"/>
+			<Classe Ident="2"/>
+		</Cours>
+		<Cours Jour="1" NumeroPlaceDebut="3" NombrePlaces="2">
+			<Matiere Ident="2"/>
+			<Professeur Ident="7"/>
+			<Classe Ident="2"/>
+		</Cours>
+		<Cours Jour="2" NumeroPlaceDebut="1" NombrePlaces="1">
+			<Matiere Ident="3"/>
+			<Professeur Ident="4"/>
+			<Classe Ident="2"/>
+		</Cours>
+		<Cours Jour="2" NumeroPlaceDebut="2" NombrePlaces="2">
+			<Matiere Ident="6"/>
+			<Professeur Ident="8"/>
+			<Classe Ident="2"/>
+		</Cours>
+		<!-- Lezione con gruppo/partizione (1B_REL) -->
+		<Cours Jour="3" NumeroPlaceDebut="1" NombrePlaces="1">
+			<Matiere Ident="9"/>
+			<Professeur Ident="9"/>
+			<Groupe Ident="1"/>
+		</Cours>
+
+		<!-- Lezioni Classe 2A -->
+		<Cours Jour="1" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="1"/>
+			<Professeur Ident="5"/>
+			<Classe Ident="3"/>
+		</Cours>
+		<Cours Jour="1" NumeroPlaceDebut="3" NombrePlaces="2">
+			<Matiere Ident="2"/>
+			<Professeur Ident="10"/>
+			<Classe Ident="3"/>
+		</Cours>
+		<Cours Jour="2" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="3"/>
+			<Professeur Ident="11"/>
+			<Classe Ident="3"/>
+		</Cours>
+		<Cours Jour="3" NumeroPlaceDebut="1" NombrePlaces="1">
+			<Matiere Ident="7"/>
+			<Professeur Ident="12"/>
+			<Classe Ident="3"/>
+		</Cours>
+
+		<!-- Lezioni Classe 2B (Co-docenza / 2 professori insieme) -->
+		<Cours Jour="1" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="1"/>
+			<Professeur Ident="8"/>
+			<Professeur Ident="13"/>
+			<Classe Ident="4"/>
+		</Cours>
+		<Cours Jour="2" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="2"/>
+			<Professeur Ident="14"/>
+			<Classe Ident="4"/>
+		</Cours>
+		<Cours Jour="3" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="5"/>
+			<Professeur Ident="15"/>
+			<Classe Ident="4"/>
+		</Cours>
+
+		<!-- Lezioni Classe 3A -->
+		<Cours Jour="1" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="1"/>
+			<Professeur Ident="11"/>
+			<Classe Ident="5"/>
+		</Cours>
+		<Cours Jour="2" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="2"/>
+			<Professeur Ident="2"/>
+			<Classe Ident="5"/>
+		</Cours>
+		<Cours Jour="3" NumeroPlaceDebut="1" NombrePlaces="2">
+			<Matiere Ident="6"/>
+			<Professeur Ident="10"/>
+			<Classe Ident="5"/>
+		</Cours>
+	</Cours>
+</Export>

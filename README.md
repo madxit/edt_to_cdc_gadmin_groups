@@ -46,7 +46,7 @@ it.madx.edttocdc
 │   └── EdtModels.kt             // Modelli di dominio (ClassTeacherData, MembershipDiff, SyncSummary, LogEntry)
 ├── edt
 │   ├── EdtXmlDownloader.kt      // Download HTTP/HTTPS sicuro, timeout e verifica integrità
-│   ├── EdtXmlParser.kt          // Parser XML con protezione XXE (relazionale e gerarchico)
+│   ├── EdtXmlParser.kt          // Parser XML con protezione XXE (schema relazionale standard EDT)
 │   └── ClassGroupMapper.kt      // Normalizzazione, validazione sintassi email e verifica formato cdc_
 ├── google
 │   └── GoogleWorkspaceClient.kt // ISOLAMENTO RIGOROSO di tutte le API Google Workspace Admin SDK
@@ -74,7 +74,7 @@ runSync(settings, dryRun)
   │      └─ Scarica XML via HTTP/HTTPS con timeout (15s) e controllo dimensioni (max 25MB)
   │
   ├── 3. EdtXmlParser.parseEdtXml()
-  │      └─ Analisi protetta da XXE; supporto formato relazionale standard o gerarchico
+  │      └─ Analisi protetta da XXE basata sullo schema ufficiale relazionale EDT
   │
   ├── 4. ClassGroupMapper.buildClassEmailMap() & buildGroupEmailMap()
   │      └─ Normalizzazione nomi classi, pulizia email, deduplicazione per classe

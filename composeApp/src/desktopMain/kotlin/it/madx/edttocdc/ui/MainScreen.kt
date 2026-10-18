@@ -1,12 +1,17 @@
 package it.madx.edttocdc.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
@@ -16,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -370,7 +376,29 @@ fun MainScreen(viewModel: MainViewModel) {
                             Text("Registro Operazioni (Log)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            // Switch per abilitare o disabilitare il log dettagliato dei gruppi (default off)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "Log gruppi",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Switch(
+                                    checked = viewModel.logGroupsDetails,
+                                    onCheckedChange = { viewModel.logGroupsDetails = it },
+                                    modifier = Modifier.scale(0.8f)
+                                )
+                            }
+
+                            Spacer(Modifier.width(2.dp))
+
                             IconButton(
                                 onClick = { viewModel.copyLogsToClipboard() },
                                 enabled = viewModel.logs.isNotEmpty()
@@ -403,7 +431,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     }
 
-                    // Area di testo dei log non modificabile con auto-scroll
+                    // Area di testo dei log non modificabile con auto-scroll e scorrimento laterale
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -421,14 +449,36 @@ fun MainScreen(viewModel: MainViewModel) {
                                 modifier = Modifier.align(Alignment.Center)
                             )
                         } else {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                items(viewModel.logs) { log ->
-                                    LogLineItem(log)
+                            val horizontalScrollState = rememberScrollState()
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(end = 12.dp, bottom = 12.dp)
+                                        .horizontalScroll(horizontalScrollState),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    items(viewModel.logs) { log ->
+                                        LogLineItem(log)
+                                    }
                                 }
+
+                                HorizontalScrollbar(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .fillMaxWidth()
+                                        .padding(end = 12.dp),
+                                    adapter = rememberScrollbarAdapter(horizontalScrollState)
+                                )
+
+                                VerticalScrollbar(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .fillMaxHeight()
+                                        .padding(bottom = 12.dp),
+                                    adapter = rememberScrollbarAdapter(listState)
+                                )
                             }
                         }
                     }
@@ -462,7 +512,6 @@ private fun LogLineItem(log: LogEntry) {
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Top
     ) {
@@ -470,13 +519,15 @@ private fun LogLineItem(log: LogEntry) {
             text = "[${log.timestamp}]",
             color = Color(0xFF6B7280),
             fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace
+            fontFamily = FontFamily.Monospace,
+            softWrap = false
         )
         Text(
             text = log.message,
             color = levelColor,
             fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace
+            fontFamily = FontFamily.Monospace,
+            softWrap = false
         )
     }
 }

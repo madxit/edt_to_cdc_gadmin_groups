@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import it.madx.edttocdc.config.AppSettings
 import it.madx.edttocdc.config.SettingsManager
+import it.madx.edttocdc.edt.ClassGroupMapper
 import it.madx.edttocdc.edt.EdtXmlDownloader
 import it.madx.edttocdc.google.GoogleWorkspaceClient
 import it.madx.edttocdc.model.LogEntry
@@ -33,6 +34,8 @@ class MainViewModel(private val scope: CoroutineScope) {
         private set
 
     var dryRun by mutableStateOf(false)
+
+    var logGroupsDetails by mutableStateOf(false)
 
     var progressStage by mutableStateOf("Pronto")
         private set
@@ -86,6 +89,21 @@ class MainViewModel(private val scope: CoroutineScope) {
                         LogLevel.SUCCESS,
                         "Verifica EDT riuscita: XML scaricato (${info.sizeBytes} byte) ed estratte ${info.detectedClassesCount} classi."
                     )
+                    if (logGroupsDetails) {
+                        val domain = settings.schoolDomain.ifBlank { "dominio.scuola" }
+                        val classEmailMap = ClassGroupMapper.buildClassEmailMap(info.parsedClasses)
+                        val groupEmailMap = ClassGroupMapper.buildGroupEmailMap(classEmailMap, domain)
+                        for ((groupEmail, emails) in groupEmailMap) {
+                            addLog(LogLevel.INFO, "Gruppo: $groupEmail")
+                            if (emails.isEmpty()) {
+                                addLog(LogLevel.WARNING, "    (nessun docente associato)")
+                            } else {
+                                for (email in emails.sorted()) {
+                                    addLog(LogLevel.INFO, "    $email")
+                                }
+                            }
+                        }
+                    }
                 } else {
                     addLog(
                         LogLevel.ERROR,
@@ -158,6 +176,7 @@ class MainViewModel(private val scope: CoroutineScope) {
             val summary = SyncEngine.runSync(
                 settings = settings,
                 dryRun = runDryRun,
+                logGroupsDetails = logGroupsDetails,
                 onLog = { entry ->
                     scope.launch(Dispatchers.Main) {
                         logs.add(entry)

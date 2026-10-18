@@ -1,5 +1,6 @@
 package it.madx.edttocdc.edt
 
+import it.madx.edttocdc.model.ClassTeacherData
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -14,7 +15,8 @@ data class EdtConnectionTestResult(
     val sizeBytes: Long,
     val contentType: String?,
     val isXmlValid: Boolean,
-    val detectedClassesCount: Int
+    val detectedClassesCount: Int,
+    val parsedClasses: List<ClassTeacherData> = emptyList()
 )
 
 /**
@@ -111,7 +113,8 @@ object EdtXmlDownloader {
                 sizeBytes = xml.toByteArray(Charsets.UTF_8).size.toLong(),
                 contentType = "text/xml",
                 isXmlValid = true,
-                detectedClassesCount = parsed.size
+                detectedClassesCount = parsed.size,
+                parsedClasses = parsed
             )
         }
     }

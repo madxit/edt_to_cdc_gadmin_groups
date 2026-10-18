@@ -50,6 +50,7 @@ object SyncEngine {
     fun runSync(
         settings: AppSettings,
         dryRun: Boolean = false,
+        logGroupsDetails: Boolean = false,
         onLog: (LogEntry) -> Unit,
         onProgress: (stage: String, current: Int, total: Int) -> Unit
     ): SyncSummary {
@@ -119,6 +120,19 @@ object SyncEngine {
 
         log(LogLevel.SUCCESS, "Individuate ${classEmailMap.size} classi distinte.", onLog)
         log(LogLevel.INFO, "Individuati ${distinctEmails.size} indirizzi email istituzionali unici.", onLog)
+
+        if (logGroupsDetails) {
+            for ((groupEmail, emails) in groupEmailMap) {
+                log(LogLevel.INFO, "Gruppo: $groupEmail", onLog)
+                if (emails.isEmpty()) {
+                    log(LogLevel.WARNING, "    (nessun docente associato)", onLog)
+                } else {
+                    for (email in emails.sorted()) {
+                        log(LogLevel.INFO, "    $email", onLog)
+                    }
+                }
+            }
+        }
 
         // Convalida formale degli indirizzi generati
         val anomalies = ClassGroupMapper.validateGroupEmailMap(groupEmailMap, settings.schoolDomain).toMutableList()

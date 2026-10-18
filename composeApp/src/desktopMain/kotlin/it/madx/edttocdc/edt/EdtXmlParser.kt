@@ -10,15 +10,14 @@ import javax.xml.parsers.DocumentBuilderFactory
 /**
  * Parser sicuro e modulare per l'analisi del file XML esportato da EDT (Index Éducation).
  *
- * Supporta la specifica ufficiale Index Éducation (ExportIndexPartenaire V3.3) con:
- * - Nodi `<Professeurs>` / `<Professeur Ident="..." EMail="..." />`
- * - Nodi `<Classes>` / `<Classe Ident="..." Nom="..." />`
- * - Nodi `<PartiesDeClasses>` e `<Groupes>` (per classi sdoppiate e gruppi opzionali)
- * - Nodi `<Cours>` / `<Cours>` con associazioni a Docenti e Classi
- * - Nodi coordinatore `<ProfesseurPrincipal Ident="..." />`
+ * Implementa fedelmente la logica di mappatura ufficiale di EDT (Index Éducation / ExportIndexPartenaire):
+ * 1. Definizione Classi: contenitore `<Classes>` contenente nodi `<Classe Ident="..." Nom="..." />`
+ * 2. Definizione Docenti: contenitore `<Professeurs>` contenente nodi `<Professeur Ident="..." EMail="..." />`
+ * 3. Partizioni e Gruppi: contenitori `<PartiesDeClasses>` e `<Groupes>` (risoluzione classi sdoppiate)
+ * 4. Lezioni: nodi `<Cours>` contenenti sotto-elementi diretti `<Classe Ident="..." />` e `<Professeur Ident="..." />`
+ * 5. Coordinatori: nodi `<ProfesseurPrincipal Ident="..." />` interni a `<Classe>`
  *
- * Implementa le direttive OWASP per la prevenzione di vulnerabilità XXE (disabilitazione DTD,
- * entità esterne ed espansione di schemi remoti).
+ * Protezione XXE (XML External Entity) completa secondo le raccomandazioni OWASP.
  */
 object EdtXmlParser {
 
@@ -84,18 +83,21 @@ object EdtXmlParser {
 
     /**
      * Formato relazionale standard EDT (Index Éducation / ExportIndexPartenaire):
-     * - `<Professeurs>` / `<Docenti>`
-     * - `<Classes>`
+     * - `<Professeurs>` -> `<Professeur>`
+     * - `<Classes>` -> `<Classe>`
      * - `<PartiesDeClasses>` e `<Groupes>`
-     * - `<Cours>`
+     * - `<Cours>` -> nodi lezione `<Cours>`
      */
     private fun parseRelationalFormat(root: Element): List<ClassTeacherData> {
         // 1. Mappa ID docente -> Email
+        // Cerca prioritariamente nel contenitore <Professeurs> o <Docenti>
         val teacherEmailById = mutableMapOf<String, String>()
-        val teacherElements = findElementsByTagNames(
-            root,
-            listOf("PROFESSEUR", "PROFESSEURS", "DOCENTE", "DOCENTI", "TEACHER", "ENSEIGNANT")
-        )
+        val profContainers = findElementsByTagNames(root, listOf("PROFESSEURS", "DOCENTI"))
+        val teacherElements = if (profContainers.isNotEmpty()) {
+            profContainers.flatMap { findElementsByTagNames(it, listOf("PROFESSEUR", "DOCENTE", "TEACHER", "ENSEIGNANT")) }
+        } else {
+            findElementsByTagNames(root, listOf("PROFESSEUR", "DOCENTE", "TEACHER", "ENSEIGNANT"))
+        }
 
         for (el in teacherElements) {
             val id = getAttributeOrChild(el, listOf("Ident", "ident", "Id", "id", "ID", "code", "Code")) ?: continue
@@ -109,14 +111,19 @@ object EdtXmlParser {
         }
 
         // 2. Mappa ID classe -> Nome classe
+        // Cerca prioritariamente nel contenitore <Classes>
         val classNameById = mutableMapOf<String, String>()
         val classIdByPartieDeClasse = mutableMapOf<String, String>()
         val principalTeachersByClass = mutableMapOf<String, MutableSet<String>>()
 
-        val classElements = findElementsByTagNames(
-            root,
-            listOf("CLASSE", "CLASSES", "CLASS")
-        )
+        val classContainers = findElementsByTagNames(root, listOf("CLASSES"))
+        val classElements = if (classContainers.isNotEmpty()) {
+            classContainers.flatMap { findElementsByTagNames(it, listOf("CLASSE", "CLASS")) }
+        } else {
+            findElementsByTagNames(root, listOf("CLASSE", "CLASS")).filter {
+                getAttributeOrChild(it, listOf("Nom", "nom", "Nome", "nome", "Libelle", "libelle")) != null
+            }
+        }
 
         for (el in classElements) {
             val id = getAttributeOrChild(el, listOf("Ident", "ident", "Id", "id", "ID", "code", "Code")) ?: continue
@@ -142,7 +149,7 @@ object EdtXmlParser {
                 }
             }
 
-            // Eventuale ProfesseurPrincipal (Coordinatore di classe)
+            // Eventuale coordinatore di classe (<ProfesseurPrincipal Ident="..."/>)
             val principals = findElementsByTagNames(el, listOf("PROFESSEURPRINCIPAL", "COORDINATORE"))
             for (pr in principals) {
                 val prId = getAttributeOrChild(pr, listOf("Ident", "ident", "Id", "id"))
@@ -163,7 +170,7 @@ object EdtXmlParser {
             val gId = getAttributeOrChild(gr, listOf("Ident", "ident", "Id", "id")) ?: continue
             val mappedClasses = classIdsByGroupe.getOrPut(gId) { mutableSetOf() }
 
-            // Tramite PartieDeClasse
+            // Tramite PartieDeClasse contenuta nel gruppo
             val parties = findElementsByTagNames(gr, listOf("PARTIEDECLASSE", "PARTIE_DE_CLASSE"))
             for (p in parties) {
                 val pId = getAttributeOrChild(p, listOf("Ident", "ident", "Id", "id"))
@@ -171,7 +178,7 @@ object EdtXmlParser {
                 if (cId != null) mappedClasses.add(cId)
             }
 
-            // Tramite Classe diretta
+            // Tramite Classe diretta nel gruppo
             val clNodes = findElementsByTagNames(gr, listOf("CLASSE", "CLASS"))
             for (cl in clNodes) {
                 if (cl != gr) {
@@ -181,11 +188,11 @@ object EdtXmlParser {
             }
         }
 
-        // 4. Inizializzazione mappa Classe -> Insieme email
+        // 4. Inizializzazione mappa Classe -> Insieme email dei docenti
         val classToEmails = mutableMapOf<String, MutableSet<String>>()
         for ((cId, className) in classNameById) {
             val emailSet = classToEmails.getOrPut(className) { mutableSetOf() }
-            // Aggiungi eventuale coordinatore di classe
+            // Includi eventuale coordinatore di classe
             val principals = principalTeachersByClass[cId] ?: emptySet()
             for (pId in principals) {
                 val email = teacherEmailById[pId]
@@ -199,7 +206,7 @@ object EdtXmlParser {
             listOf("COUR", "COURS", "SERVICE", "SERVICES", "LEZIONE", "LEZIONI", "ATTIVITA", "SEANCE", "LESSON")
         )
 
-        // Filtra unicamente gli elementi foglia di lezione (escludendo i contenitori padri)
+        // Filtra unicamente gli elementi foglia di lezione (escludendo il contenitore <Cours>)
         val lessonItems = rawRelationElements.filter { el ->
             val childLessons = findElementsByTagNames(
                 el,
@@ -209,8 +216,9 @@ object EdtXmlParser {
         }
 
         for (lesson in lessonItems) {
-            // Estrazione classi della lezione
             val classIds = mutableSetOf<String>()
+
+            // Sotto-elementi Classe diretti (come in edt.js: collect('Classe'))
             val directClasses = findReferencedIds(
                 lesson,
                 listOf("CLASSE", "CLASS"),
@@ -218,7 +226,7 @@ object EdtXmlParser {
             )
             classIds.addAll(directClasses)
 
-            // Estrazione da eventuali gruppi associati alla lezione
+            // Sotto-elementi Groupe (es. materie opzionali o partizioni di classe)
             val groupIds = findReferencedIds(
                 lesson,
                 listOf("GROUPE", "GROUP"),
@@ -229,7 +237,7 @@ object EdtXmlParser {
                 if (cIds != null) classIds.addAll(cIds)
             }
 
-            // Estrazione da eventuali parti di classi associate alla lezione
+            // Sotto-elementi PartieDeClasse diretti
             val partieIds = findReferencedIds(
                 lesson,
                 listOf("PARTIEDECLASSE", "PARTIE_DE_CLASSE"),
@@ -240,13 +248,14 @@ object EdtXmlParser {
                 if (cId != null) classIds.add(cId)
             }
 
-            // Estrazione docenti della lezione
+            // Sotto-elementi Professeur diretti (come in edt.js: collect('Professeur'))
             val teacherIds = findReferencedIds(
                 lesson,
                 listOf("PROFESSEUR", "DOCENTE", "DOCENTI", "TEACHER"),
                 listOf("IdDocente", "DocenteId", "id_docente", "docente", "Docente", "professeur", "Professeur")
             )
 
+            // Associa ciascun docente a ciascuna classe della lezione
             for (cId in classIds) {
                 val className = classNameById[cId] ?: continue
                 val emailSet = classToEmails.getOrPut(className) { mutableSetOf() }

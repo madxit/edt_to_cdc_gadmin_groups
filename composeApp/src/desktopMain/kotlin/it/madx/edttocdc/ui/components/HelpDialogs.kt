@@ -85,8 +85,10 @@ fun GoogleHelpDialog(onDismiss: () -> Unit) {
                 )
 
                 Text(
-                    "2. Abilitazione delle API:\n" +
-                    "   • Nella barra di ricerca o nel menu 'API e servizi', cercare 'Admin SDK API' e fare clic su Abilita."
+                    "2. Abilitazione delle API nella Google Cloud Console:\n" +
+                    "   • Nel menu 'API e servizi' > 'Libreria', cercare e abilitare entrambe le seguenti API:\n" +
+                    "     1) 'Admin SDK API' (gestione di gruppi e membri);\n" +
+                    "     2) 'Groups Settings API' (impostazione permessi di accesso 'Restricted')."
                 )
 
                 Text(

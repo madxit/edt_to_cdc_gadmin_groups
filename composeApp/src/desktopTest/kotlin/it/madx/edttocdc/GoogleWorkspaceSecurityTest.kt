@@ -88,4 +88,14 @@ class GoogleWorkspaceSecurityTest {
         assertTrue(result.isSuccess)
         assertTrue(result.getOrDefault(false))
     }
+
+    @Test
+    fun testEnsureGroupExistsSecurityBoundary() {
+        assertThrows<SecurityException> {
+            client.ensureGroupExists("tuttascuola@scuola.edu.it", "tuttascuola", dryRun = true).getOrThrow()
+        }
+        assertThrows<SecurityException> {
+            client.ensureGroupExists("cdc_1a@altradominio.com", "1a", dryRun = true).getOrThrow()
+        }
+    }
 }

@@ -265,6 +265,10 @@ class GoogleWorkspaceClient(
     // SEZIONE METODI DI SCRITTURA (MODIFICA GOOGLE WORKSPACE)
     // ========================================================================
 
+    // Flag per evitare di riprovare Groups Settings API ad ogni singolo gruppo se non abilitata/autorizzata
+    @Volatile
+    private var groupsSettingsDisabledReason: String? = null
+
     // ============================================================================
     // !!! REVISIONE SICUREZZA: OPERAZIONE DI SCRITTURA SU GOOGLE WORKSPACE !!!
     // Metodo: configureRestrictedGroupSettings
@@ -306,6 +310,12 @@ class GoogleWorkspaceClient(
                 return@runCatching true
             }
 
+            val disabledReason = groupsSettingsDisabledReason
+            if (disabledReason != null) {
+                logger.fine("Impostazioni 'Restricted' per $normalizedEmail non applicate: $disabledReason")
+                return@runCatching false
+            }
+
             val restrictedSettings = Groups()
                 .setWhoCanJoin("INVITED_CAN_JOIN")
                 .setWhoCanViewMembership("ALL_MEMBERS_CAN_VIEW")
@@ -315,16 +325,30 @@ class GoogleWorkspaceClient(
                 .setWhoCanContactOwner("ALL_MEMBERS_CAN_CONTACT")
 
             try {
-                executeWithRetry {
-                    groupsSettingsService.groups().patch(normalizedEmail, restrictedSettings).execute()
-                }
+                // Esecuzione diretta senza retry in loop per non rallentare l'applicazione se l'API non è abilitata/autorizzata
+                groupsSettingsService.groups().patch(normalizedEmail, restrictedSettings).execute()
                 logger.info("Impostazioni di accesso 'Restricted' applicate con successo al gruppo $normalizedEmail")
                 true
             } catch (e: Exception) {
-                logger.warning(
-                    "Impossibile applicare le impostazioni 'Restricted' al gruppo $normalizedEmail tramite Groups Settings API: ${e.message}. " +
-                            "Verificare che l'ambito OAuth 'https://www.googleapis.com/auth/apps.groups.settings' sia autorizzato nella delega DWD."
-                )
+                val msg = e.message ?: ""
+                val isAuthError = msg.contains("401", ignoreCase = true) ||
+                        msg.contains("Unauthorized", ignoreCase = true) ||
+                        msg.contains("invalid_grant", ignoreCase = true) ||
+                        msg.contains("unauthorized_client", ignoreCase = true) ||
+                        msg.contains("access_denied", ignoreCase = true)
+
+                if (isAuthError) {
+                    val reason = "Groups Settings API non autorizzata (401 Unauthorized). Verificare che: " +
+                            "1) Nella Google Cloud Console sia abilitata la 'Groups Settings API'; " +
+                            "2) Nella Google Workspace Admin Console (DWD) sia autorizzato l'ambito 'https://www.googleapis.com/auth/apps.groups.settings'."
+                    groupsSettingsDisabledReason = reason
+                    logger.warning("Impossibile applicare le impostazioni 'Restricted' al gruppo $normalizedEmail: $reason")
+                } else {
+                    logger.warning(
+                        "Impossibile applicare le impostazioni 'Restricted' al gruppo $normalizedEmail tramite Groups Settings API: ${e.message}. " +
+                                "Verificare che l'ambito OAuth 'https://www.googleapis.com/auth/apps.groups.settings' sia autorizzato nella delega DWD."
+                    )
+                }
                 false
             }
         }.onFailure { e ->
@@ -385,13 +409,16 @@ class GoogleWorkspaceClient(
     fun ensureGroupExists(
         groupEmail: String,
         className: String,
-        description: String = "Mailing list Consiglio di Classe $className",
+        description: String? = null,
         dryRun: Boolean = false
     ): Result<Boolean> {
         return runCatching {
             val normalizedEmail = ClassGroupMapper.normalizeEmail(groupEmail)
             // CONTROLLO DI SICUREZZA INTERNO OBBLIGATORIO:
             validateManagedGroup(normalizedEmail)
+
+            val formattedClassName = className.trim().uppercase()
+            val groupDescription = description ?: "Mailing list Consiglio di Classe $formattedClassName"
 
             val existing = getGroup(normalizedEmail)
             if (existing != null) {
@@ -401,18 +428,18 @@ class GoogleWorkspaceClient(
             } else {
                 if (dryRun) {
                     // Modalità simulazione: segnala la creazione prevista senza effettuare chiamate API di scrittura
-                    logger.info("Gruppo $normalizedEmail verrebbe creato con impostazioni 'Restricted' (dry-run)")
+                    logger.info("Gruppo $normalizedEmail verrebbe creato come 'Consiglio di Classe $formattedClassName' con impostazioni 'Restricted' (dry-run)")
                     true
                 } else {
                     val newGroup = Group()
                         .setEmail(normalizedEmail)
-                        .setName("Consiglio di Classe $className")
-                        .setDescription(description)
+                        .setName("Consiglio di Classe $formattedClassName")
+                        .setDescription(groupDescription)
                     try {
                         executeWithRetry {
                             directoryService.groups().insert(newGroup).execute()
                         }
-                        logger.info("Creato gruppo $normalizedEmail")
+                        logger.info("Creato gruppo $normalizedEmail (Consiglio di Classe $formattedClassName)")
                     } catch (e: GoogleJsonResponseException) {
                         if (e.statusCode != 409) {
                             throw e
@@ -764,7 +791,7 @@ class GoogleWorkspaceClient(
 
     private fun extractClassNameFromGroupEmail(groupEmail: String): String {
         val local = groupEmail.split("@")[0]
-        return local.removePrefix("cdc_")
+        return local.removePrefix("cdc_").uppercase()
     }
 
     /**
@@ -808,11 +835,19 @@ class GoogleWorkspaceClient(
             } catch (e: IOException) {
                 lastException = e
                 val msg = e.message ?: ""
-                if (msg.contains("invalid_grant", ignoreCase = true)) {
+                val isAuthError = msg.contains("invalid_grant", ignoreCase = true) ||
+                        msg.contains("401", ignoreCase = true) ||
+                        msg.contains("Unauthorized", ignoreCase = true) ||
+                        msg.contains("unauthorized_client", ignoreCase = true) ||
+                        msg.contains("access_denied", ignoreCase = true)
+
+                if (isAuthError) {
                     val friendlyMsg = if (msg.contains("Invalid email or User ID", ignoreCase = true)) {
                         "Autenticazione Google fallita: l'account amministratore '${adminEmail ?: ""}' non esiste o non appartiene al dominio Google Workspace autorizzato. Verificare l'indirizzo inserito."
+                    } else if (msg.contains("401", ignoreCase = true) || msg.contains("Unauthorized", ignoreCase = true)) {
+                        "Autenticazione token Google respinta (401 Unauthorized): verificare che l'API richiesta sia abilitata nella Google Cloud Console e che l'ambito OAuth sia autorizzato nella delega DWD."
                     } else {
-                        "Autenticazione Google fallita (invalid_grant): verificare che il Service Account sia stato autorizzato per la delega DWD nella Google Admin Console per l'amministratore '${adminEmail ?: ""}'."
+                        "Autenticazione Google fallita ($msg): verificare che il Service Account sia stato autorizzato per la delega DWD nella Google Admin Console per l'amministratore '${adminEmail ?: ""}'."
                     }
                     throw IOException(friendlyMsg, e)
                 }

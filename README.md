@@ -145,7 +145,9 @@ Tale funzione valida che l'indirizzo corrisponda tassativamente a `^cdc_[a-zA-Z0
 1. **Google Cloud Console:**
    - Accedere a [console.cloud.google.com](https://console.cloud.google.com) con l'account super-amministratore della scuola.
    - Creare un nuovo progetto (es. `MailingList-CdC`).
-   - In *API e servizi > Libreria*, cercare **Admin SDK API** e fare clic su **Abilita**.
+   - In *API e servizi > Libreria*, cercare e abilitare entrambe le API:
+     1. **Admin SDK API** (per la gestione di gruppi e membri).
+     2. **Groups Settings API** (per impostare automaticamente i permessi 'Restricted' sui gruppi).
 2. **Creazione Service Account:**
    - In *IAM e amministrazione > Account di servizio*, creare un account di servizio (es. `cdc-sync-sa`).
    - Non assegnare ruoli IAM cloud non necessari.

@@ -152,18 +152,19 @@ Tale funzione valida che l'indirizzo corrisponda tassativamente a `^cdc_[a-zA-Z0
    - Aprire l'account di servizio creato, andare nella scheda **Chiavi**, fare clic su **Aggiungi chiave > Crea nuova chiave** e selezionare il formato **JSON**.
    - Salvare il file JSON in modo sicuro sul proprio computer.
 3. **Delega a livello di dominio (Domain-Wide Delegation):**
-   - Copiare l'**ID client univoco** (Client ID) del Service Account.
-   - Accedere alla Console di amministrazione Google Workspace: [admin.google.com](https://admin.google.com).
-   - Navigare in: **Sicurezza > Controllo degli accessi e dei dati > Controlli API > Gestisci delega a livello di dominio**.
-   - Fare clic su **Aggiungi nuovo**, incollare il Client ID e specificare **esclusivamente** gli ambiti (scopes) minimi indispensabili:
+   - Nella Console di amministrazione Google Workspace ([admin.google.com](https://admin.google.com)), andare in:  
+     **Sicurezza > Controllo degli accessi e dei dati > Controlli API > Gestisci delega a livello di dominio**.
+   - Fare clic su **Aggiungi nuovo**.
+   - Nel campo **ID client**: incollare l'ID client numerico del Service Account (reperibile nella scheda del Service Account su Google Cloud oppure aprendo il file JSON scaricato alla voce `"client_id"`).
+   - Nel campo **Ambiti OAuth (separati da virgola / comma-delimited)**, inserire esattamente:
      ```text
-     https://www.googleapis.com/auth/admin.directory.group
-     https://www.googleapis.com/auth/admin.directory.group.member
+     https://www.googleapis.com/auth/admin.directory.group, https://www.googleapis.com/auth/admin.directory.group.member, https://www.googleapis.com/auth/apps.groups.settings
      ```
+   - Fare clic su **Autorizza**.
 4. **Configurazione nell'applicazione:**
    - Selezionare il file JSON di credenziali con il pulsante **Sfoglia...**.
-   - Inserire il dominio della scuola (es. `scuola.edu.it`).
    - Inserire l'email dell'amministratore per la delega DWD (es. `admin@scuola.edu.it`).
+   - Il dominio istituzionale della scuola viene ricavato automaticamente dal file EDT.
    - Fare clic su **Verifica Connessione**.
 
 ---

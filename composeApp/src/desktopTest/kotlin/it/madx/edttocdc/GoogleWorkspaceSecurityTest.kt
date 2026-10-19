@@ -71,4 +71,21 @@ class GoogleWorkspaceSecurityTest {
             assertTrue(content.contains("Cancellazione di gruppi:"), "Deve specificare lo stato di cancellazione gruppi")
         }
     }
+
+    @Test
+    fun testConfigureRestrictedGroupSettingsValidatesGroup() {
+        assertThrows<SecurityException> {
+            client.configureRestrictedGroupSettings("tuttascuola@scuola.edu.it", dryRun = true).getOrThrow()
+        }
+        assertThrows<SecurityException> {
+            client.configureRestrictedGroupSettings("cdc_1a@altradominio.com", dryRun = true).getOrThrow()
+        }
+    }
+
+    @Test
+    fun testConfigureRestrictedGroupSettingsDryRun() {
+        val result = client.configureRestrictedGroupSettings("cdc_1a@scuola.edu.it", dryRun = true)
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrDefault(false))
+    }
 }

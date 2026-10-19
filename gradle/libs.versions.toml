@@ -7,6 +7,7 @@ google-admin-directory = "directory_v1-rev20240429-2.0.0"
 google-auth = "1.24.0"
 google-api-client = "2.4.0"
 google-http-gson = "1.44.1"
+google-groups-settings = "v1-rev20220614-2.0.0"
 junit = "5.10.2"
 
 [libraries]
@@ -20,6 +21,7 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 google-api-services-admin-directory = { module = "com.google.apis:google-api-services-admin-directory", version.ref = "google-admin-directory" }
+google-api-services-groupssettings = { module = "com.google.apis:google-api-services-groupssettings", version.ref = "google-groups-settings" }
 google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "google-auth" }
 google-api-client = { module = "com.google.api-client:google-api-client", version.ref = "google-api-client" }
 google-http-client-gson = { module = "com.google.http-client:google-http-client-gson", version.ref = "google-http-gson" }

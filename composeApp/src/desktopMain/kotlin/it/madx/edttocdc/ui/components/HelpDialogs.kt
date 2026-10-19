@@ -100,21 +100,22 @@ fun GoogleHelpDialog(onDismiss: () -> Unit) {
 
                 Text(
                     "4. Configurazione della Delega a livello di dominio (Domain-Wide Delegation):\n" +
-                    "   • Nella pagina del Service Account, copiare l'ID client univoco (Client ID, serie di numeri).\n" +
+                    "   • Nella pagina del Service Account (o aprendo il file JSON scaricato al campo 'client_id'), copiare l'ID client numerico univoco.\n" +
                     "   • Aprire la Console di amministrazione Google Workspace (https://admin.google.com).\n" +
-                    "   • Andare in Sicurezza > Controllo degli accessi e dei dati > Controlli API > Gestisci delega a livello di dominio.\n" +
-                    "   • Fare clic su 'Aggiungi nuovo' e incollare il Client ID.\n" +
-                    "   • Nel campo Scopes OAuth, inserire esclusivamente i permessi minimi indispensabili:\n" +
-                    "     https://www.googleapis.com/auth/admin.directory.group\n" +
-                    "     https://www.googleapis.com/auth/admin.directory.group.member"
+                    "   • Andare in: Sicurezza > Controllo degli accessi e dei dati > Controlli API > Gestisci delega a livello di dominio.\n" +
+                    "   • Fare clic su 'Aggiungi nuovo':\n" +
+                    "     - Nel campo 'ID client': incollare il Client ID numerico.\n" +
+                    "     - Nel campo 'Ambiti OAuth' (comma-delimited), incollare la stringa seguente con gli ambiti separati da virgola (Directory API e Groups Settings per impostare l'accesso 'Restricted'):\n\n" +
+                    "       https://www.googleapis.com/auth/admin.directory.group, https://www.googleapis.com/auth/admin.directory.group.member, https://www.googleapis.com/auth/apps.groups.settings\n\n" +
+                    "     - Fare clic su 'Autorizza'."
                 )
 
                 Text(
                     "5. Impostazioni nell'applicazione:\n" +
-                    "   • Selezionare il file JSON di credenziali scaricato.\n" +
-                    "   • Inserire il dominio della scuola (es. istituto.edu.it).\n" +
-                    "   • Inserire l'email dell'amministratore da impersonare con la delega.\n" +
-                    "   • Utilizzare il pulsante 'Verifica Connessione' per testare l'autenticazione."
+                    "   • File credenziali JSON: selezionare il file scaricato da Google Cloud.\n" +
+                    "   • Email Amministratore (DWD): inserire l'email dell'amministratore reale della scuola abilitato (es. admin@scuola.edu.it).\n" +
+                    "   • Dominio scuola: viene ricavato automaticamente dal file EDT (non serve inserirlo manualmente).\n" +
+                    "   • Utilizzare il pulsante 'Verifica Connessione' per testare l'accesso."
                 )
 
                 Text(

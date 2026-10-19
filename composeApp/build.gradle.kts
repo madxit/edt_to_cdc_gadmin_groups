@@ -62,8 +62,9 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.kotlinx.serialization.json)
                 
-                // Google Admin SDK Directory API & Google Auth
+                // Google Admin SDK Directory API, Groups Settings API & Google Auth
                 implementation(libs.google.api.services.admin.directory)
+                implementation(libs.google.api.services.groupssettings)
                 implementation(libs.google.auth.library.oauth2.http)
                 implementation(libs.google.api.client)
                 implementation(libs.google.http.client.gson)

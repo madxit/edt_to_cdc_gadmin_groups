@@ -21,7 +21,8 @@ class SettingsManagerTest {
         val invalidUrlSettings = AppSettings(
             edtXmlUrl = "ftp://scuola.it/test.xml",
             googleCredentialsPath = "/fake/creds.json",
-            schoolDomain = "scuola.edu.it"
+            schoolDomain = "scuola.edu.it",
+            adminEmail = "admin@scuola.edu.it"
         )
         val urlErrors = invalidUrlSettings.validate()
         assertTrue(urlErrors.any { it.contains("http:// o https://") })
@@ -30,7 +31,8 @@ class SettingsManagerTest {
         val invalidDomainSettings = AppSettings(
             edtXmlUrl = "https://scuola.it/test.xml",
             googleCredentialsPath = "/fake/creds.json",
-            schoolDomain = "non_un_dominio"
+            schoolDomain = "non_un_dominio",
+            adminEmail = "admin@scuola.edu.it"
         )
         val domainErrors = invalidDomainSettings.validate()
         assertTrue(domainErrors.any { it.contains("dominio") })

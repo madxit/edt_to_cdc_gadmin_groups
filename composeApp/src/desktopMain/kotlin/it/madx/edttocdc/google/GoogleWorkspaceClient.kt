@@ -8,6 +8,7 @@ package it.madx.edttocdc.google
 //   - verifyGroupMembers
 // Punti di ingresso che possono scrivere su Google Workspace:
 //   - ensureGroupExists (creazione gruppo mancante)
+//   - configureRestrictedGroupSettings (impostazione permessi restricted)
 //   - replaceGroupMembers (aggiunta/rimozione iscritti al gruppo)
 //   - syncGroup (orchestrazione sincronizzazione singolo gruppo)
 // Cancellazione di gruppi:
@@ -23,6 +24,8 @@ import com.google.api.services.directory.Directory
 import com.google.api.services.directory.DirectoryScopes
 import com.google.api.services.directory.model.Group
 import com.google.api.services.directory.model.Member
+import com.google.api.services.groupssettings.Groupssettings
+import com.google.api.services.groupssettings.model.Groups
 import com.google.auth.http.HttpCredentialsAdapter
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.ServiceAccountCredentials
@@ -36,14 +39,14 @@ import java.io.IOException
 import java.util.logging.Logger
 
 /**
- * Client dedicato e isolato per tutte le interazioni con Google Workspace / Admin SDK Directory API.
+ * Client dedicato e isolato per tutte le interazioni con Google Workspace / Admin SDK Directory API e Groups Settings API.
  * Tutte le chiamate alle API Google risiedono esclusivamente in questa classe.
  * Le operazioni di scrittura sono ridotte al minimo indispensabile e protette da controlli
  * tassativi sul formato dell'indirizzo del gruppo e sul rispetto della modalità simulazione (dry-run).
  *
  * IMPORTANTE - Limitazione dei privilegi:
- * gli scope OAuth utilizzati (ADMIN_DIRECTORY_GROUP e ADMIN_DIRECTORY_GROUP_MEMBER) consentono
- * tecnicamente di operare su tutti i gruppi del dominio. Google non permette di limitare gli scope
+ * gli scope OAuth utilizzati (ADMIN_DIRECTORY_GROUP, ADMIN_DIRECTORY_GROUP_MEMBER e APPS_GROUPS_SETTINGS) consentono
+ * tecnicamente di operare sui gruppi del dominio. Google non permette di limitare gli scope
  * a un sottoinsieme di gruppi. La restrizione ai soli gruppi `cdc_{classe}@{dominio}` è quindi
  * applicata esclusivamente a livello applicativo tramite [validateManagedGroup].
  *
@@ -62,19 +65,19 @@ class GoogleWorkspaceClient(
 
     private val jsonFactory = GsonFactory.getDefaultInstance()
     private val normalizedDomain = domain.trim().trimStart('@').lowercase()
+
     private val directoryService: Directory by lazy {
         initDirectoryService()
     }
 
-    private fun initDirectoryService(): Directory {
+    private val groupsSettingsService: Groupssettings by lazy {
+        initGroupsSettingsService()
+    }
+
+    private fun createGoogleCredentials(scopes: List<String>): GoogleCredentials {
         if (!credentialsFile.exists() || !credentialsFile.canRead()) {
             throw IOException("File di credenziali Google non accessibile: ${credentialsFile.name}")
         }
-
-        val scopes = listOf(
-            DirectoryScopes.ADMIN_DIRECTORY_GROUP,
-            DirectoryScopes.ADMIN_DIRECTORY_GROUP_MEMBER
-        )
 
         var credentials = FileInputStream(credentialsFile).use { stream ->
             GoogleCredentials.fromStream(stream)
@@ -84,12 +87,27 @@ class GoogleWorkspaceClient(
             credentials = credentials.createScoped(scopes)
         }
 
-        // Se è specificata un'email amministrativa e si utilizzano credenziali di un Service Account,
-        // configura la Domain-Wide Delegation (impersonazione dell'amministratore del dominio)
-        if (!adminEmail.isNullOrBlank() && credentials is ServiceAccountCredentials) {
+        // Se si utilizzano credenziali di un Service Account, è obbligatoria
+        // la Domain-Wide Delegation (impersonazione dell'amministratore del dominio)
+        if (credentials is ServiceAccountCredentials) {
+            if (adminEmail.isNullOrBlank()) {
+                throw IllegalArgumentException(
+                    "Le credenziali appartengono al Service Account Google Cloud '${credentials.clientEmail}'. " +
+                    "Per accedere alle Google API è necessario specificare l'email di un amministratore Google Workspace abilitato alla delega DWD."
+                )
+            }
             credentials = credentials.createDelegated(adminEmail.trim())
         }
 
+        return credentials
+    }
+
+    private fun initDirectoryService(): Directory {
+        val scopes = listOf(
+            DirectoryScopes.ADMIN_DIRECTORY_GROUP,
+            DirectoryScopes.ADMIN_DIRECTORY_GROUP_MEMBER
+        )
+        val credentials = createGoogleCredentials(scopes)
         val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
         val credentialsAdapter = HttpCredentialsAdapter(credentials)
 
@@ -101,6 +119,23 @@ class GoogleWorkspaceClient(
         }
 
         return Directory.Builder(httpTransport, jsonFactory, requestInitializer)
+            .setApplicationName("EdtToCdcSync/1.0")
+            .build()
+    }
+
+    private fun initGroupsSettingsService(): Groupssettings {
+        val scopes = listOf("https://www.googleapis.com/auth/apps.groups.settings")
+        val credentials = createGoogleCredentials(scopes)
+        val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
+        val credentialsAdapter = HttpCredentialsAdapter(credentials)
+
+        val requestInitializer = HttpRequestInitializer { request ->
+            credentialsAdapter.initialize(request)
+            request.connectTimeout = CONNECT_TIMEOUT_MS
+            request.readTimeout = READ_TIMEOUT_MS
+        }
+
+        return Groupssettings.Builder(httpTransport, jsonFactory, requestInitializer)
             .setApplicationName("EdtToCdcSync/1.0")
             .build()
     }
@@ -232,6 +267,101 @@ class GoogleWorkspaceClient(
 
     // ============================================================================
     // !!! REVISIONE SICUREZZA: OPERAZIONE DI SCRITTURA SU GOOGLE WORKSPACE !!!
+    // Metodo: configureRestrictedGroupSettings
+    // Questo metodo configura i permessi di accesso di un gruppo Google impostandoli su
+    // 'Restricted' (Con restrizioni) per proteggere la privacy del Consiglio di Classe.
+    // Verificare con particolare attenzione:
+    // - che l'indirizzo appartenga tassativamente al perimetro cdc_{classe}@dominio;
+    // - che validateManagedGroup(groupEmail) blocchi qualsiasi altro indirizzo;
+    // - che se dryRun == true NESSUNA chiamata di configurazione venga eseguita;
+    // - che un eventuale errore di autorizzazione su Groups Settings API non blocchi
+    //   il processo ma segnali chiaramente l'avviso all'amministratore.
+    // ============================================================================
+    /**
+     * Configura le impostazioni di accesso del gruppo come "Restricted" (Con restrizioni)
+     * tramite Google Groups Settings API.
+     *
+     * Impostazioni applicate:
+     * - whoCanJoin = "INVITED_CAN_JOIN" (Iscrizione solo su invito/gestione admin)
+     * - whoCanViewMembership = "ALL_MEMBERS_CAN_VIEW" (Solo i membri vedono l'elenco iscritti)
+     * - whoCanViewGroup = "ALL_MEMBERS_CAN_VIEW" (Solo i membri vedono i messaggi del gruppo)
+     * - whoCanPostMessage = "ALL_MEMBERS_CAN_POST" (Solo i docenti membri possono scrivere al gruppo)
+     * - allowExternalMembers = "false" (Nessun membro esterno all'organizzazione)
+     * - whoCanContactOwner = "ALL_MEMBERS_CAN_CONTACT" (Solo i membri possono contattare i gestori)
+     *
+     * @param groupEmail Indirizzo email del gruppo autorizzato.
+     * @param dryRun Se true, simula l'operazione senza effettuare chiamate API reali.
+     * @return Result<Boolean>: true se le impostazioni sono state applicate, false altrimenti.
+     */
+    fun configureRestrictedGroupSettings(
+        groupEmail: String,
+        dryRun: Boolean = false
+    ): Result<Boolean> {
+        return runCatching {
+            val normalizedEmail = ClassGroupMapper.normalizeEmail(groupEmail)
+            validateManagedGroup(normalizedEmail)
+
+            if (dryRun) {
+                logger.info("Impostazioni di accesso 'Restricted' verrebbero applicate al gruppo $normalizedEmail (dry-run)")
+                return@runCatching true
+            }
+
+            val restrictedSettings = Groups()
+                .setWhoCanJoin("INVITED_CAN_JOIN")
+                .setWhoCanViewMembership("ALL_MEMBERS_CAN_VIEW")
+                .setWhoCanViewGroup("ALL_MEMBERS_CAN_VIEW")
+                .setWhoCanPostMessage("ALL_MEMBERS_CAN_POST")
+                .setAllowExternalMembers("false")
+                .setWhoCanContactOwner("ALL_MEMBERS_CAN_CONTACT")
+
+            try {
+                executeWithRetry {
+                    groupsSettingsService.groups().patch(normalizedEmail, restrictedSettings).execute()
+                }
+                logger.info("Impostazioni di accesso 'Restricted' applicate con successo al gruppo $normalizedEmail")
+                true
+            } catch (e: Exception) {
+                logger.warning(
+                    "Impossibile applicare le impostazioni 'Restricted' al gruppo $normalizedEmail tramite Groups Settings API: ${e.message}. " +
+                            "Verificare che l'ambito OAuth 'https://www.googleapis.com/auth/apps.groups.settings' sia autorizzato nella delega DWD."
+                )
+                false
+            }
+        }.onFailure { e ->
+            logger.severe("Errore in configureRestrictedGroupSettings per il gruppo $groupEmail: ${e.message}")
+        }
+    }
+
+    /**
+     * Attende che un gruppo appena creato sia visibile nelle repliche di lettura di Google Directory API.
+     */
+    private fun waitForGroupPropagation(groupEmail: String, maxAttempts: Int = 5, delayMs: Long = 1000) {
+        for (attempt in 1..maxAttempts) {
+            try {
+                val group = directoryService.groups().get(groupEmail).execute()
+                if (group != null) {
+                    logger.info("Gruppo $groupEmail propagato con successo e visibile nelle API Google")
+                    return
+                }
+            } catch (e: GoogleJsonResponseException) {
+                if (e.statusCode != 404) {
+                    logger.warning("Verifica propagazione gruppo $groupEmail: HTTP ${e.statusCode}")
+                }
+            } catch (e: Exception) {
+                logger.warning("Verifica propagazione gruppo $groupEmail: ${e.message}")
+            }
+            try {
+                Thread.sleep(delayMs)
+            } catch (ie: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
+        logger.info("Attesa propagazione per il gruppo $groupEmail terminata: proseguo con la sincronizzazione")
+    }
+
+    // ============================================================================
+    // !!! REVISIONE SICUREZZA: OPERAZIONE DI SCRITTURA SU GOOGLE WORKSPACE !!!
     // Metodo: ensureGroupExists
     // Questo metodo può creare un gruppo mancante in Google Workspace.
     // Verificare con particolare attenzione:
@@ -242,7 +372,7 @@ class GoogleWorkspaceClient(
     // - che un eventuale 409 Conflict durante l'insert sia gestito come gruppo già esistente.
     // ============================================================================
     /**
-     * Verifica l'esistenza del gruppo e, se mancante, lo crea.
+     * Verifica l'esistenza del gruppo e, se mancante, lo crea con impostazioni di accesso 'Restricted'.
      * Operazione di scrittura.
      * In dry-run non esegue alcuna creazione e restituisce true se il gruppo verrebbe creato.
      *
@@ -271,7 +401,7 @@ class GoogleWorkspaceClient(
             } else {
                 if (dryRun) {
                     // Modalità simulazione: segnala la creazione prevista senza effettuare chiamate API di scrittura
-                    logger.info("Gruppo $normalizedEmail verrebbe creato (dry-run)")
+                    logger.info("Gruppo $normalizedEmail verrebbe creato con impostazioni 'Restricted' (dry-run)")
                     true
                 } else {
                     val newGroup = Group()
@@ -290,6 +420,13 @@ class GoogleWorkspaceClient(
                         // 409 = il gruppo è stato creato nel frattempo da un altro processo: nessuna azione necessaria
                         logger.info("Gruppo $normalizedEmail già creato da un altro processo (409): nessuna azione necessaria")
                     }
+
+                    // Configura le impostazioni di accesso 'Restricted' sul nuovo gruppo
+                    configureRestrictedGroupSettings(normalizedEmail, dryRun = false)
+
+                    // Attende che il nuovo gruppo sia propagato e visibile a Google Directory API
+                    waitForGroupPropagation(normalizedEmail)
+
                     true
                 }
             }
@@ -302,7 +439,7 @@ class GoogleWorkspaceClient(
     // !!! REVISIONE SICUREZZA: OPERAZIONE DI SCRITTURA SU GOOGLE WORKSPACE !!!
     // Metodo: replaceGroupMembers
     // Questo metodo aggiunge docenti mancanti e rimuove docenti non più presenti
-    // nella classe.
+    // nella classe. Se il gruppo non esiste ancora, lo crea automaticamente.
     // Verificare con particolare attenzione:
     // - che il gruppo sia rigorosamente nel formato cdc_{classe}@dominio;
     // - che rimuova ESCLUSIVAMENTE iscritti non previsti e MAI il gruppo stesso;
@@ -314,7 +451,8 @@ class GoogleWorkspaceClient(
     // ============================================================================
     /**
      * Sostituisce i membri del gruppo con quelli desiderati, rimuovendo solo quelli non previsti
-     * e aggiungendo solo quelli mancanti.
+     * e aggiungendo solo quelli mancanti. Se il gruppo non esiste, lo crea automaticamente con
+     * impostazioni 'Restricted'.
      * Operazione di scrittura.
      *
      * @param groupEmail Indirizzo email del gruppo autorizzato.
@@ -342,17 +480,23 @@ class GoogleWorkspaceClient(
                 }
             }
 
-            // Se il gruppo non esiste, in dry-run assumiamo che non ci siano membri attuali.
-            // In esecuzione reale il gruppo deve esistere prima di poter sostituire i membri.
+            // Se il gruppo non esiste:
+            // - in dry-run assumiamo nessun membro attuale;
+            // - in esecuzione reale lo creiamo automaticamente con impostazioni 'Restricted'
             val existingGroup = getGroup(normGroupEmail)
             val currentMembers = if (existingGroup == null) {
                 if (dryRun) {
                     logger.info("Gruppo $normGroupEmail non esistente: in dry-run si assume nessun membro attuale")
                     emptySet<String>()
                 } else {
-                    throw IllegalStateException(
-                        "Il gruppo $normGroupEmail non esiste. Eseguire ensureGroupExists prima di sostituire i membri."
-                    )
+                    val className = extractClassNameFromGroupEmail(normGroupEmail)
+                    logger.info("Gruppo $normGroupEmail non presente: creazione automatica con impostazioni 'Restricted'...")
+                    val ensureResult = ensureGroupExists(normGroupEmail, className, dryRun = false)
+                    if (ensureResult.isFailure) {
+                        throw ensureResult.exceptionOrNull()
+                            ?: IllegalStateException("Impossibile creare automaticamente il gruppo $normGroupEmail")
+                    }
+                    emptySet<String>()
                 }
             } else {
                 listGroupMembers(normGroupEmail).toSet()
@@ -393,15 +537,13 @@ class GoogleWorkspaceClient(
                     }
                 }
 
-                // 2. Aggiunta membri mancanti
+                // 2. Aggiunta membri mancanti con retry resiliente alla propagazione
                 for (toAdd in diff.toAdd) {
                     val newMember = Member()
                         .setEmail(toAdd)
                         .setRole("MEMBER")
                     try {
-                        executeWithRetry {
-                            directoryService.members().insert(normGroupEmail, newMember).execute()
-                        }
+                        executeWithRetryMemberInsert(normGroupEmail, newMember)
                         logger.info("Aggiunto membro $toAdd al gruppo $normGroupEmail")
                     } catch (e: GoogleJsonResponseException) {
                         if (e.statusCode != 409) {
@@ -416,6 +558,46 @@ class GoogleWorkspaceClient(
             diff
         }.onFailure { e ->
             logger.severe("Errore in replaceGroupMembers per il gruppo $groupEmail: ${e.message}")
+        }
+    }
+
+    private fun executeWithRetryMemberInsert(
+        groupEmail: String,
+        newMember: Member,
+        maxAttempts: Int = 4,
+        initialDelayMs: Long = 1500
+    ) {
+        var delay = initialDelayMs
+        for (attempt in 1..maxAttempts) {
+            try {
+                directoryService.members().insert(groupEmail, newMember).execute()
+                return
+            } catch (e: GoogleJsonResponseException) {
+                if (e.statusCode == 409) return
+                if (e.statusCode == 404 && attempt < maxAttempts) {
+                    logger.warning("Gruppo $groupEmail non ancora propagato per inserimento membri (tentativo $attempt/$maxAttempts). Attesa ${delay}ms...")
+                    try {
+                        Thread.sleep(delay)
+                    } catch (ie: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw e
+                    }
+                    delay *= 2
+                    continue
+                }
+                if ((e.statusCode == 429 || e.statusCode == 500 || e.statusCode == 503) && attempt < maxAttempts) {
+                    logger.warning("Errore temporaneo API (${e.statusCode}) inserimento membro (tentativo $attempt/$maxAttempts). Attesa ${delay}ms...")
+                    try {
+                        Thread.sleep(delay)
+                    } catch (ie: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw e
+                    }
+                    delay *= 2
+                    continue
+                }
+                throw e
+            }
         }
     }
 
@@ -482,16 +664,34 @@ class GoogleWorkspaceClient(
                 addedMembers = diff.toAdd.toList()
                 removedMembers = diff.toRemove.toList()
 
-                // Verifica finale dello stato reale solo dopo una sincronizzazione reale
+                // Verifica finale dello stato reale solo dopo una sincronizzazione reale con tolleranza per propagazione
                 if (!dryRun) {
-                    val verifyResult = verifyGroupMembers(normalizedEmail, desiredMembers)
-                    if (verifyResult.isFailure) {
-                        errors.add(
-                            "Impossibile verificare lo stato finale del gruppo: " +
-                                    (verifyResult.exceptionOrNull()?.message ?: "errore sconosciuto")
-                        )
-                    } else if (!verifyResult.getOrDefault(false)) {
-                        errors.add("Lo stato finale del gruppo non corrisponde all'elenco desiderato")
+                    var verified = false
+                    for (vAttempt in 1..3) {
+                        val verifyResult = verifyGroupMembers(normalizedEmail, desiredMembers)
+                        if (verifyResult.isSuccess && verifyResult.getOrDefault(false)) {
+                            verified = true
+                            break
+                        }
+                        if (vAttempt < 3) {
+                            try {
+                                Thread.sleep(1000L * vAttempt)
+                            } catch (ie: InterruptedException) {
+                                Thread.currentThread().interrupt()
+                                break
+                            }
+                        }
+                    }
+                    if (!verified) {
+                        val finalVerify = verifyGroupMembers(normalizedEmail, desiredMembers)
+                        if (finalVerify.isFailure) {
+                            errors.add(
+                                "Impossibile verificare lo stato finale del gruppo: " +
+                                        (finalVerify.exceptionOrNull()?.message ?: "errore sconosciuto")
+                            )
+                        } else if (!finalVerify.getOrDefault(false)) {
+                            errors.add("Lo stato finale del gruppo non corrisponde all'elenco desiderato (possibile ritardo di propagazione Google Workspace)")
+                        }
                     }
                 }
             }
@@ -607,6 +807,16 @@ class GoogleWorkspaceClient(
                 }
             } catch (e: IOException) {
                 lastException = e
+                val msg = e.message ?: ""
+                if (msg.contains("invalid_grant", ignoreCase = true)) {
+                    val friendlyMsg = if (msg.contains("Invalid email or User ID", ignoreCase = true)) {
+                        "Autenticazione Google fallita: l'account amministratore '${adminEmail ?: ""}' non esiste o non appartiene al dominio Google Workspace autorizzato. Verificare l'indirizzo inserito."
+                    } else {
+                        "Autenticazione Google fallita (invalid_grant): verificare che il Service Account sia stato autorizzato per la delega DWD nella Google Admin Console per l'amministratore '${adminEmail ?: ""}'."
+                    }
+                    throw IOException(friendlyMsg, e)
+                }
+
                 if (attempt == maxAttempts) throw e
                 logger.warning(
                     "Errore di rete durante una chiamata API " +

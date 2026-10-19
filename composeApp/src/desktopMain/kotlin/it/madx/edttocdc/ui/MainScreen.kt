@@ -215,6 +215,27 @@ fun MainScreen(viewModel: MainViewModel) {
                             }
                         }
 
+                        OutlinedTextField(
+                            value = viewModel.settings.adminEmail,
+                            onValueChange = { input ->
+                                val trimmed = input.trim()
+                                val inferredDomain = if (trimmed.contains("@")) trimmed.substringAfter('@') else viewModel.settings.schoolDomain
+                                viewModel.updateSettings(
+                                    viewModel.settings.copy(
+                                        adminEmail = trimmed,
+                                        schoolDomain = if (viewModel.settings.schoolDomain.isBlank() && inferredDomain.isNotBlank()) inferredDomain else viewModel.settings.schoolDomain
+                                    )
+                                )
+                            },
+                            label = { Text("Email Amministratore Google Workspace (DWD)") },
+                            placeholder = {
+                                val detected = viewModel.settings.schoolDomain
+                                if (detected.isNotBlank()) Text("admin@$detected") else Text("admin@scuola.edu.it")
+                            },
+                            singleLine = true,
+                            enabled = !viewModel.isRunning,
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -223,7 +244,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             Button(
                                 onClick = { viewModel.testGoogleConnection() },
                                 enabled = !viewModel.isRunning &&
-                                    viewModel.settings.googleCredentialsPath.isNotBlank()
+                                    viewModel.settings.googleCredentialsPath.isNotBlank() &&
+                                    viewModel.settings.adminEmail.isNotBlank()
                             ) {
                                 Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))

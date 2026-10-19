@@ -44,7 +44,9 @@ data class AppSettings(
             }
         }
 
-        if (adminEmail.isNotBlank()) {
+        if (adminEmail.isBlank()) {
+            errors.add("L'email dell'amministratore (DWD) è obbligatoria per autorizzare il Service Account Google Workspace.")
+        } else {
             val emailRegex = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
             if (!emailRegex.matches(adminEmail.trim())) {
                 errors.add("L'email dell'amministratore delegato non ha un formato valido.")

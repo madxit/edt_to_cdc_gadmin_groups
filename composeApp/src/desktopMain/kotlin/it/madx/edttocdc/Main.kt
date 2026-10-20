@@ -13,7 +13,7 @@ import it.madx.edttocdc.ui.MainViewModel
 import it.madx.edttocdc.ui.theme.EdtSyncTheme
 
 fun main() = application {
-    val windowState = remember { WindowState(size = DpSize(1100.dp, 750.dp)) }
+    val windowState = remember { WindowState(size = DpSize(1300.dp, 840.dp)) }
 
     Window(
         onCloseRequest = ::exitApplication,

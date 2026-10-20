@@ -183,19 +183,129 @@ class MainViewModel(private val scope: CoroutineScope) {
         }
     }
 
-    fun startSync(runDryRun: Boolean) {
+    fun startSync(runDryRun: Boolean = false) {
         if (isRunning) return
 
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 isRunning = true
-                progressStage = "Avvio sincronizzazione..."
+                progressStage = "Fase 1/3: Verifica sorgente EDT..."
                 progressCurrent = 0
                 progressTotal = 100
+                addLog(LogLevel.INFO, "=== Avvio procedura di sincronizzazione ===")
+                addLog(LogLevel.INFO, "Fase 1/3: Verifica sorgente dati EDT...")
             }
 
+            // --- VERIFICA 1: Sorgente dati EDT ---
+            val edtResult = EdtXmlDownloader.testEdtConnection(settings.edtXmlUrl)
+            if (edtResult.isFailure) {
+                withContext(Dispatchers.Main) {
+                    isRunning = false
+                    progressStage = "Errore verifica EDT"
+                    addLog(
+                        LogLevel.ERROR,
+                        "Interruzione sincronizzazione: verifica EDT fallita - ${edtResult.exceptionOrNull()?.message}"
+                    )
+                }
+                return@launch
+            }
+
+            val edtInfo = edtResult.getOrThrow()
+            val detectedDomain = ClassGroupMapper.detectDominantDomain(edtInfo.parsedClasses)
+            val updatedSettings = if (detectedDomain != null && settings.schoolDomain.isBlank()) {
+                val s = settings.copy(schoolDomain = detectedDomain)
+                withContext(Dispatchers.Main) {
+                    updateSettings(s)
+                    addLog(LogLevel.SUCCESS, "Dominio scuola ricavato dal file EDT: $detectedDomain")
+                }
+                s
+            } else {
+                settings
+            }
+
+            withContext(Dispatchers.Main) {
+                addLog(
+                    LogLevel.SUCCESS,
+                    "Fase 1 completata: XML EDT valido, trovate ${edtInfo.detectedClassesCount} classi."
+                )
+                progressStage = "Fase 2/3: Verifica connessione Google Workspace..."
+                progressCurrent = 15
+                addLog(LogLevel.INFO, "Fase 2/3: Verifica connessione Google Workspace...")
+            }
+
+            // --- VERIFICA 2: Google Workspace ---
+            val credResult = SettingsManager.getCredentialsFile(updatedSettings.googleCredentialsPath)
+            if (credResult.isFailure) {
+                withContext(Dispatchers.Main) {
+                    isRunning = false
+                    progressStage = "Errore credenziali"
+                    addLog(
+                        LogLevel.ERROR,
+                        "Interruzione sincronizzazione: file credenziali non valido - ${credResult.exceptionOrNull()?.message}"
+                    )
+                }
+                return@launch
+            }
+
+            val effectiveDomain = updatedSettings.schoolDomain.ifBlank {
+                detectedDomain ?: updatedSettings.adminEmail.substringAfter('@', "").ifBlank { null }
+            }
+            if (effectiveDomain.isNullOrBlank()) {
+                withContext(Dispatchers.Main) {
+                    isRunning = false
+                    progressStage = "Errore dominio"
+                    addLog(
+                        LogLevel.ERROR,
+                        "Interruzione sincronizzazione: impossibile determinare il dominio della scuola."
+                    )
+                }
+                return@launch
+            }
+
+            val credentialsFile = credResult.getOrThrow()
+            val googleConnResult = runCatching {
+                val client = GoogleWorkspaceClient(
+                    credentialsFile = credentialsFile,
+                    domain = effectiveDomain,
+                    adminEmail = updatedSettings.adminEmail.ifBlank { null }
+                )
+                client.testConnection().getOrThrow()
+            }
+
+            if (googleConnResult.isFailure) {
+                withContext(Dispatchers.Main) {
+                    isRunning = false
+                    progressStage = "Errore Google Workspace"
+                    addLog(
+                        LogLevel.ERROR,
+                        "Interruzione sincronizzazione: verifica Google Workspace fallita - ${googleConnResult.exceptionOrNull()?.message}"
+                    )
+                }
+                return@launch
+            }
+
+            val gInfo = googleConnResult.getOrThrow()
+            val finalSettings = if (updatedSettings.schoolDomain.isBlank()) {
+                val s = updatedSettings.copy(schoolDomain = effectiveDomain)
+                withContext(Dispatchers.Main) { updateSettings(s) }
+                s
+            } else {
+                updatedSettings
+            }
+
+            withContext(Dispatchers.Main) {
+                addLog(
+                    LogLevel.SUCCESS,
+                    "Fase 2 completata: connessione Google Workspace riuscita (${gInfo.authenticatedEmail})."
+                )
+                progressStage = "Fase 3/3: Sincronizzazione gruppi in corso..."
+                progressCurrent = 30
+                addLog(LogLevel.INFO, "Fase 3/3: Avvio sincronizzazione gruppi CdC...")
+            }
+
+            // --- FASE 3: Sincronizzazione reale ---
             val summary = SyncEngine.runSync(
-                settings = settings,
+                settings = finalSettings,
                 dryRun = runDryRun,
                 logGroupsDetails = logGroupsDetails,
                 onLog = { entry ->

@@ -255,7 +255,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 }
 
-                // 3. SCHEDA AZIONI DI SINCRONIZZAZIONE
+                // 3. ESECUZIONE SINCRONIZZAZIONE
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
@@ -265,26 +265,18 @@ fun MainScreen(viewModel: MainViewModel) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column {
-                                Text("Simulazione (Dry Run)", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                Text(
-                                    "Calcola differenze e log senza modificare Google",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = viewModel.dryRun,
-                                onCheckedChange = { viewModel.dryRun = it },
-                                enabled = !viewModel.isRunning
-                            )
+                            Icon(Icons.Default.PlayCircle, contentDescription = null, tint = PrimaryBlue)
+                            Text("3. Esecuzione Sincronizzazione", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
 
-                        HorizontalDivider()
+                        Text(
+                            "Avviando la sincronizzazione, l'applicativo eseguirà in sequenza automatica la verifica del file EDT, la verifica della connessione a Google Workspace e l'aggiornamento reale dei gruppi CdC.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
                         AnimatedVisibility(visible = viewModel.isRunning) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -310,37 +302,29 @@ fun MainScreen(viewModel: MainViewModel) {
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Button(
+                            onClick = { viewModel.startSync(runDryRun = false) },
+                            enabled = !viewModel.isRunning &&
+                                viewModel.settings.edtXmlUrl.isNotBlank() &&
+                                viewModel.settings.googleCredentialsPath.isNotBlank() &&
+                                viewModel.settings.adminEmail.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PrimaryBlue
+                            ),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
                         ) {
-                            Button(
-                                onClick = { viewModel.startSync(runDryRun = viewModel.dryRun) },
-                                enabled = !viewModel.isRunning,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (viewModel.dryRun) DryRunPurple else PrimaryBlue
-                                ),
-                                modifier = Modifier.weight(1f).height(48.dp)
-                            ) {
-                                if (viewModel.isRunning) {
-                                    CircularProgressIndicator(
-                                        color = Color.White,
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("In esecuzione...")
-                                } else {
-                                    Icon(
-                                        if (viewModel.dryRun) Icons.Default.Visibility else Icons.Default.PlayArrow,
-                                        contentDescription = null
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        if (viewModel.dryRun) "Avvia Simulazione (Dry Run)" else "Avvia Sincronizzazione",
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                            if (viewModel.isRunning) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Sincronizzazione in corso...")
+                            } else {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Avvia Sincronizzazione", fontWeight = FontWeight.Bold)
                             }
                         }
                     }

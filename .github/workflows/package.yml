@@ -1,0 +1,138 @@
+name: Package Multiplatform
+
+on:
+  push:
+    tags:
+      - 'Release-*'
+      - 'v*'
+  release:
+    types: [created, published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.extract_meta.outputs.version }}
+      app_name: ${{ steps.extract_meta.outputs.name }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Extract App Version and Name
+        id: extract_meta
+        shell: bash
+        run: |
+          APP_VERSION=$(grep 'val appVersion =' composeApp/build.gradle.kts | sed -E 's/.*"(.+)".*/\1/')
+          APP_NAME=$(grep 'val appName =' composeApp/build.gradle.kts | sed -E 's/.*"(.+)".*/\1/')
+          echo "version=$APP_VERSION" >> $GITHUB_OUTPUT
+          echo "name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "Extracted $APP_NAME version $APP_VERSION"
+
+  build:
+    needs: prepare
+    name: Package for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            task: packageMsi packageExe createDistributable
+            suffix: windows
+          - os: macos-latest
+            task: packageDmg
+            suffix: macos
+          - os: ubuntu-latest
+            task: packageDeb
+            suffix: linux
+          - os: ubuntu-latest
+            task: fatJar
+            suffix: jar
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Build Packages
+        run: ./gradlew :composeApp:${{ matrix.task }}
+
+      - name: Create Portable Windows Zip
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p final-artifacts
+          cd composeApp/build/compose/binaries/main/
+          APP_DIR=$(ls -d */ | grep -vE 'msi|exe' | head -n 1)
+          if [ -d "$APP_DIR" ]; then
+            echo "Packaging portable zip from $APP_DIR"
+            7z a "../../../../../${{ needs.prepare.outputs.app_name }}-v${{ needs.prepare.outputs.app_version }}-portable-win.zip" "./$APP_DIR/*"
+            cd ../../../../../
+            mv ${{ needs.prepare.outputs.app_name }}-v${{ needs.prepare.outputs.app_version }}-portable-win.zip final-artifacts/
+          else
+            echo "Error: Distributable directory not found"
+            ls -R
+            exit 1
+          fi
+
+      - name: Collect Artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p final-artifacts
+          cp composeApp/build/compose/binaries/main/msi/*.msi final-artifacts/${{ needs.prepare.outputs.app_name }}-v${{ needs.prepare.outputs.app_version }}.msi || true
+          cp composeApp/build/compose/binaries/main/exe/*.exe final-artifacts/${{ needs.prepare.outputs.app_name }}-v${{ needs.prepare.outputs.app_version }}.exe || true
+
+      - name: Collect Artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          mkdir -p final-artifacts
+          cp composeApp/build/compose/binaries/main/dmg/*.dmg final-artifacts/${{ needs.prepare.outputs.app_name }}-v${{ needs.prepare.outputs.app_version }}.dmg
+
+      - name: Collect Artifacts (Linux)
+        if: matrix.os == 'ubuntu-latest' && matrix.suffix == 'linux'
+        shell: bash
+        run: |
+          mkdir -p final-artifacts
+          cp composeApp/build/compose/binaries/main/deb/*.deb final-artifacts/${{ needs.prepare.outputs.app_name }}-v${{ needs.prepare.outputs.app_version }}.deb
+
+      - name: Collect Artifacts (Standalone JAR)
+        if: matrix.suffix == 'jar'
+        shell: bash
+        run: |
+          mkdir -p final-artifacts
+          cp composeApp/build/libs/*-standalone.jar final-artifacts/${{ needs.prepare.outputs.app_name }}-v${{ needs.prepare.outputs.app_version }}-standalone.jar
+
+      - name: Upload Intermediate Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.suffix }}
+          path: final-artifacts/*
+
+  upload-release-assets:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    if: (startsWith(github.ref, 'refs/tags/') || github.event_name == 'release')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          merge-multiple: true
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: all-artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

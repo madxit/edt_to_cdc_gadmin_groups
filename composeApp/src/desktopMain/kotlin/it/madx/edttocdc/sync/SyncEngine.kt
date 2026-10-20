@@ -205,7 +205,7 @@ object SyncEngine {
                 } else {
                     createdGroupsCount++
                     val prefix = if (dryRun) "[SIMULAZIONE] Creazione prevista gruppo:" else "Creazione nuovo gruppo:"
-                    log(if (dryRun) LogLevel.DRY_RUN else LogLevel.SUCCESS, "$prefix $groupEmail (impostazioni Restricted)", onLog)
+                    log(if (dryRun) LogLevel.DRY_RUN else LogLevel.SUCCESS, "$prefix $groupEmail (impostazioni Mailing List)", onLog)
                 }
 
                 // Sincronizza membri tramite il metodo dedicato in GoogleWorkspaceClient

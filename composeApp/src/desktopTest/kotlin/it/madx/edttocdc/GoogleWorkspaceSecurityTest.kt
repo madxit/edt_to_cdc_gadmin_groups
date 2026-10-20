@@ -98,4 +98,27 @@ class GoogleWorkspaceSecurityTest {
             client.ensureGroupExists("cdc_1a@altradominio.com", "1a", dryRun = true).getOrThrow()
         }
     }
+
+    @Test
+    fun testCdcGroupAccessPolicyDefaults() {
+        // Verifica che i criteri predefiniti corrispondano a una mailing list interna:
+        // - conversazioni web e dettagli riservati a gestori
+        // - invio post e visualizzazione membri aperti a tutta l'organizzazione
+        org.junit.jupiter.api.Assertions.assertEquals("ALL_MANAGERS_CAN_VIEW", it.madx.edttocdc.google.CdcGroupAccessPolicy.whoCanViewGroup)
+        org.junit.jupiter.api.Assertions.assertEquals("ALL_IN_DOMAIN_CAN_VIEW", it.madx.edttocdc.google.CdcGroupAccessPolicy.whoCanViewMembership)
+        org.junit.jupiter.api.Assertions.assertEquals("ALL_IN_DOMAIN_CAN_POST", it.madx.edttocdc.google.CdcGroupAccessPolicy.whoCanPostMessage)
+        org.junit.jupiter.api.Assertions.assertEquals("ALL_MANAGERS_CAN_CONTACT", it.madx.edttocdc.google.CdcGroupAccessPolicy.whoCanContactOwner)
+        org.junit.jupiter.api.Assertions.assertEquals("INVITED_CAN_JOIN", it.madx.edttocdc.google.CdcGroupAccessPolicy.whoCanJoin)
+        org.junit.jupiter.api.Assertions.assertEquals("false", it.madx.edttocdc.google.CdcGroupAccessPolicy.allowExternalMembers)
+    }
+
+    @Test
+    fun testEnsureGroupAccessSettingsSecurityBoundary() {
+        assertThrows<SecurityException> {
+            client.ensureGroupAccessSettings("tuttascuola@scuola.edu.it", dryRun = true).getOrThrow()
+        }
+        val result = client.ensureGroupAccessSettings("cdc_1a@scuola.edu.it", dryRun = true)
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrDefault(false))
+    }
 }

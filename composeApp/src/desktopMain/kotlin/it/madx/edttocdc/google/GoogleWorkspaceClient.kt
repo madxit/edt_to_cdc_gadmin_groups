@@ -8,7 +8,8 @@ package it.madx.edttocdc.google
 //   - verifyGroupMembers
 // Punti di ingresso che possono scrivere su Google Workspace:
 //   - ensureGroupExists (creazione gruppo mancante)
-//   - configureRestrictedGroupSettings (impostazione permessi restricted)
+//   - ensureGroupAccessSettings (verifica/impostazione permessi access type)
+//   - configureRestrictedGroupSettings (impostazione permessi retrocompatibile)
 //   - replaceGroupMembers (aggiunta/rimozione iscritti al gruppo)
 //   - syncGroup (orchestrazione sincronizzazione singolo gruppo)
 // Cancellazione di gruppi:
@@ -37,6 +38,70 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
 import java.util.logging.Logger
+
+// ============================================================================
+// CONFIGURAZIONE POLICY DI ACCESSO GRUPPI ("Access Type" / Groups Settings)
+//
+// Questa sezione permette di modificare a mano i livelli di autorizzazione
+// applicati alle mailing list dei Consigli di Classe (cdc_{classe}@dominio).
+//
+// OBIETTIVO PREDEFINITO:
+// - Mailing list interna scrivibile da chiunque nell'organizzazione scolastica.
+// - Conversazioni web e dettagli riservati esclusivamente a gestori e proprietari.
+// - Elenco membri visibile a tutta l'organizzazione per trasparenza interna.
+//
+// LIVELLI E VALORI ACCETTATI DALLE GOOGLE GROUPS SETTINGS API:
+//
+// 1. whoCanViewGroup (Chi può visualizzare le conversazioni web del gruppo):
+//      "ALL_MANAGERS_CAN_VIEW"  -> Solo Gestori e Proprietari (PREDEFINITO)
+//      "ALL_MEMBERS_CAN_VIEW"   -> Solo i docenti membri del CdC
+//      "ALL_IN_DOMAIN_CAN_VIEW" -> Chiunque nell'organizzazione
+//      "ANYONE_CAN_VIEW"        -> Pubblico su Internet
+//
+// 2. whoCanViewMembership (Chi può visualizzare i membri del gruppo):
+//      "ALL_IN_DOMAIN_CAN_VIEW" -> Intera organizzazione (PREDEFINITO)
+//      "ALL_MEMBERS_CAN_VIEW"   -> Solo i membri del CdC
+//      "ALL_MANAGERS_CAN_VIEW"  -> Solo Gestori e Proprietari
+//
+// 3. whoCanPostMessage (Chi può pubblicare post / inviare email alla mailing list):
+//      "ALL_IN_DOMAIN_CAN_POST" -> Intera organizzazione (PREDEFINITO)
+//      "ALL_MEMBERS_CAN_POST"   -> Solo i docenti membri del CdC
+//      "ALL_MANAGERS_CAN_POST"  -> Solo Gestori e Proprietari
+//      "ANYONE_CAN_POST"        -> Chiunque su Internet
+//
+// 4. whoCanContactOwner (Chi può modificare dettagli / contattare i gestori):
+//      "ALL_MANAGERS_CAN_CONTACT" -> Gestori del gruppo (PREDEFINITO)
+//      "ALL_MEMBERS_CAN_CONTACT"  -> Membri del CdC
+//      "ALL_IN_DOMAIN_CAN_CONTACT"-> Intera organizzazione
+//
+// 5. whoCanJoin (Chi può iscriversi al gruppo):
+//      "INVITED_CAN_JOIN"         -> Solo su invito / gestito dall'applicativo (PREDEFINITO)
+//      "CAN_REQUEST_TO_JOIN"      -> Richiesta di adesione con approvazione
+//      "ALL_IN_DOMAIN_CAN_JOIN"   -> Iscrizione libera per chiunque nell'organizzazione
+//
+// 6. allowExternalMembers (Consenti membri con email esterne al dominio della scuola):
+//      "false" -> Disabilitato / Solo account del dominio della scuola (PREDEFINITO per sicurezza)
+//      "true"  -> Consente membri esterni
+// ============================================================================
+object CdcGroupAccessPolicy {
+    /** Chi può visualizzare le conversazioni web: Gestori del gruppo */
+    var whoCanViewGroup: String = "ALL_MANAGERS_CAN_VIEW"
+
+    /** Chi può visualizzare i membri: Intera organizzazione */
+    var whoCanViewMembership: String = "ALL_IN_DOMAIN_CAN_VIEW"
+
+    /** Chi può pubblicare post / inviare email: Intera organizzazione */
+    var whoCanPostMessage: String = "ALL_IN_DOMAIN_CAN_POST"
+
+    /** Chi può modificare dettagli / contattare i gestori: Gestori del gruppo */
+    var whoCanContactOwner: String = "ALL_MANAGERS_CAN_CONTACT"
+
+    /** Chi può iscriversi: Solo invitati / gestiti automaticamente dall'applicazione */
+    var whoCanJoin: String = "INVITED_CAN_JOIN"
+
+    /** Consenti membri esterni all'organizzazione della scuola ("false" = disabilitato) */
+    var allowExternalMembers: String = "false"
+}
 
 /**
  * Client dedicato e isolato per tutte le interazioni con Google Workspace / Admin SDK Directory API e Groups Settings API.
@@ -271,34 +336,28 @@ class GoogleWorkspaceClient(
 
     // ============================================================================
     // !!! REVISIONE SICUREZZA: OPERAZIONE DI SCRITTURA SU GOOGLE WORKSPACE !!!
-    // Metodo: configureRestrictedGroupSettings
-    // Questo metodo configura i permessi di accesso di un gruppo Google impostandoli su
-    // 'Restricted' (Con restrizioni) per proteggere la privacy del Consiglio di Classe.
+    // Metodo: ensureGroupAccessSettings
+    // Questo metodo configura o verifica i permessi di accesso di un gruppo Google
+    // secondo i parametri definiti in [CdcGroupAccessPolicy].
     // Verificare con particolare attenzione:
     // - che l'indirizzo appartenga tassativamente al perimetro cdc_{classe}@dominio;
     // - che validateManagedGroup(groupEmail) blocchi qualsiasi altro indirizzo;
-    // - che se dryRun == true NESSUNA chiamata di configurazione venga eseguita;
+    // - che se dryRun == true NESSUNA chiamata di configurazione/scrittura venga eseguita;
+    // - che se il gruppo esiste già, verifichi prima lo stato e applichi modifiche SOLO se non allineato;
     // - che un eventuale errore di autorizzazione su Groups Settings API non blocchi
     //   il processo ma segnali chiaramente l'avviso all'amministratore.
     // ============================================================================
     /**
-     * Configura le impostazioni di accesso del gruppo come "Restricted" (Con restrizioni)
-     * tramite Google Groups Settings API.
-     *
-     * Impostazioni applicate:
-     * - whoCanJoin = "INVITED_CAN_JOIN" (Iscrizione solo su invito/gestione admin)
-     * - whoCanViewMembership = "ALL_MEMBERS_CAN_VIEW" (Solo i membri vedono l'elenco iscritti)
-     * - whoCanViewGroup = "ALL_MEMBERS_CAN_VIEW" (Solo i membri vedono i messaggi del gruppo)
-     * - whoCanPostMessage = "ALL_MEMBERS_CAN_POST" (Solo i docenti membri possono scrivere al gruppo)
-     * - allowExternalMembers = "false" (Nessun membro esterno all'organizzazione)
-     * - whoCanContactOwner = "ALL_MEMBERS_CAN_CONTACT" (Solo i membri possono contattare i gestori)
+     * Verifica e applica i criteri di accesso configurati in [CdcGroupAccessPolicy] al gruppo specificato.
      *
      * @param groupEmail Indirizzo email del gruppo autorizzato.
-     * @param dryRun Se true, simula l'operazione senza effettuare chiamate API reali.
-     * @return Result<Boolean>: true se le impostazioni sono state applicate, false altrimenti.
+     * @param checkIfAlreadyAligned Se true, legge lo stato attuale e applica modifiche solo se differiscono.
+     * @param dryRun Se true, simula l'operazione senza effettuare chiamate API di scrittura reali.
+     * @return Result<Boolean>: true se l'operazione ha avuto successo o non erano necessarie modifiche, false altrimenti.
      */
-    fun configureRestrictedGroupSettings(
+    fun ensureGroupAccessSettings(
         groupEmail: String,
+        checkIfAlreadyAligned: Boolean = false,
         dryRun: Boolean = false
     ): Result<Boolean> {
         return runCatching {
@@ -306,28 +365,49 @@ class GoogleWorkspaceClient(
             validateManagedGroup(normalizedEmail)
 
             if (dryRun) {
-                logger.info("Impostazioni di accesso 'Restricted' verrebbero applicate al gruppo $normalizedEmail (dry-run)")
+                logger.info("Impostazioni di accesso verrebbero verificate/applicate per il gruppo $normalizedEmail (dry-run)")
                 return@runCatching true
             }
 
             val disabledReason = groupsSettingsDisabledReason
             if (disabledReason != null) {
-                logger.fine("Impostazioni 'Restricted' per $normalizedEmail non applicate: $disabledReason")
+                logger.fine("Impostazioni di accesso per $normalizedEmail non verificate: $disabledReason")
                 return@runCatching false
             }
 
-            val restrictedSettings = Groups()
-                .setWhoCanJoin("INVITED_CAN_JOIN")
-                .setWhoCanViewMembership("ALL_MEMBERS_CAN_VIEW")
-                .setWhoCanViewGroup("ALL_MEMBERS_CAN_VIEW")
-                .setWhoCanPostMessage("ALL_MEMBERS_CAN_POST")
-                .setAllowExternalMembers("false")
-                .setWhoCanContactOwner("ALL_MEMBERS_CAN_CONTACT")
+            val targetSettings = Groups()
+                .setWhoCanViewGroup(CdcGroupAccessPolicy.whoCanViewGroup)
+                .setWhoCanViewMembership(CdcGroupAccessPolicy.whoCanViewMembership)
+                .setWhoCanPostMessage(CdcGroupAccessPolicy.whoCanPostMessage)
+                .setWhoCanContactOwner(CdcGroupAccessPolicy.whoCanContactOwner)
+                .setWhoCanJoin(CdcGroupAccessPolicy.whoCanJoin)
+                .setAllowExternalMembers(CdcGroupAccessPolicy.allowExternalMembers)
 
             try {
-                // Esecuzione diretta senza retry in loop per non rallentare l'applicazione se l'API non è abilitata/autorizzata
-                groupsSettingsService.groups().patch(normalizedEmail, restrictedSettings).execute()
-                logger.info("Impostazioni di accesso 'Restricted' applicate con successo al gruppo $normalizedEmail")
+                if (checkIfAlreadyAligned) {
+                    val current = groupsSettingsService.groups().get(normalizedEmail).execute()
+                    val isAlreadyAligned = current != null &&
+                            current.whoCanViewGroup == CdcGroupAccessPolicy.whoCanViewGroup &&
+                            current.whoCanViewMembership == CdcGroupAccessPolicy.whoCanViewMembership &&
+                            current.whoCanPostMessage == CdcGroupAccessPolicy.whoCanPostMessage &&
+                            current.whoCanContactOwner == CdcGroupAccessPolicy.whoCanContactOwner &&
+                            current.whoCanJoin == CdcGroupAccessPolicy.whoCanJoin &&
+                            current.allowExternalMembers == CdcGroupAccessPolicy.allowExternalMembers
+
+                    if (isAlreadyAligned) {
+                        logger.info("Impostazioni di accesso per il gruppo $normalizedEmail già conformi alla policy (nessuna modifica necessaria)")
+                        return@runCatching true
+                    }
+                    logger.info("Impostazioni di accesso per il gruppo esistente $normalizedEmail non conformi: aggiornamento in corso...")
+                }
+
+                groupsSettingsService.groups().patch(normalizedEmail, targetSettings).execute()
+                logger.info(
+                    "Impostazioni di accesso applicate con successo al gruppo $normalizedEmail " +
+                            "(conversazioni=${CdcGroupAccessPolicy.whoCanViewGroup}, " +
+                            "post=${CdcGroupAccessPolicy.whoCanPostMessage}, " +
+                            "membri=${CdcGroupAccessPolicy.whoCanViewMembership})"
+                )
                 true
             } catch (e: Exception) {
                 val msg = e.message ?: ""
@@ -342,18 +422,27 @@ class GoogleWorkspaceClient(
                             "1) Nella Google Cloud Console sia abilitata la 'Groups Settings API'; " +
                             "2) Nella Google Workspace Admin Console (DWD) sia autorizzato l'ambito 'https://www.googleapis.com/auth/apps.groups.settings'."
                     groupsSettingsDisabledReason = reason
-                    logger.warning("Impossibile applicare le impostazioni 'Restricted' al gruppo $normalizedEmail: $reason")
+                    logger.warning("Impossibile verificare/applicare le impostazioni al gruppo $normalizedEmail: $reason")
                 } else {
                     logger.warning(
-                        "Impossibile applicare le impostazioni 'Restricted' al gruppo $normalizedEmail tramite Groups Settings API: ${e.message}. " +
-                                "Verificare che l'ambito OAuth 'https://www.googleapis.com/auth/apps.groups.settings' sia autorizzato nella delega DWD."
+                        "Impossibile verificare/applicare le impostazioni al gruppo $normalizedEmail tramite Groups Settings API: ${e.message}."
                     )
                 }
                 false
             }
         }.onFailure { e ->
-            logger.severe("Errore in configureRestrictedGroupSettings per il gruppo $groupEmail: ${e.message}")
+            logger.severe("Errore in ensureGroupAccessSettings per il gruppo $groupEmail: ${e.message}")
         }
+    }
+
+    /**
+     * Metodo retrocompatibile per configurare le impostazioni del gruppo.
+     */
+    fun configureRestrictedGroupSettings(
+        groupEmail: String,
+        dryRun: Boolean = false
+    ): Result<Boolean> {
+        return ensureGroupAccessSettings(groupEmail, checkIfAlreadyAligned = false, dryRun = dryRun)
     }
 
     /**
@@ -396,7 +485,8 @@ class GoogleWorkspaceClient(
     // - che un eventuale 409 Conflict durante l'insert sia gestito come gruppo già esistente.
     // ============================================================================
     /**
-     * Verifica l'esistenza del gruppo e, se mancante, lo crea con impostazioni di accesso 'Restricted'.
+     * Verifica l'esistenza del gruppo e, se mancante, lo crea con le impostazioni di policy configurate.
+     * Se il gruppo esiste già, verifica e allinea le impostazioni di accesso.
      * Operazione di scrittura.
      * In dry-run non esegue alcuna creazione e restituisce true se il gruppo verrebbe creato.
      *
@@ -424,11 +514,13 @@ class GoogleWorkspaceClient(
             if (existing != null) {
                 // Il gruppo esiste già: nessuna creazione necessaria
                 logger.info("Gruppo $normalizedEmail già esistente")
+                // Verifica e allinea le impostazioni di accesso dell'Access Type se non conformi
+                ensureGroupAccessSettings(normalizedEmail, checkIfAlreadyAligned = true, dryRun = dryRun)
                 false
             } else {
                 if (dryRun) {
                     // Modalità simulazione: segnala la creazione prevista senza effettuare chiamate API di scrittura
-                    logger.info("Gruppo $normalizedEmail verrebbe creato come 'Consiglio di Classe $formattedClassName' con impostazioni 'Restricted' (dry-run)")
+                    logger.info("Gruppo $normalizedEmail verrebbe creato come 'Consiglio di Classe $formattedClassName' con impostazioni mailing list (dry-run)")
                     true
                 } else {
                     val newGroup = Group()
@@ -448,8 +540,8 @@ class GoogleWorkspaceClient(
                         logger.info("Gruppo $normalizedEmail già creato da un altro processo (409): nessuna azione necessaria")
                     }
 
-                    // Configura le impostazioni di accesso 'Restricted' sul nuovo gruppo
-                    configureRestrictedGroupSettings(normalizedEmail, dryRun = false)
+                    // Configura le impostazioni di accesso sul nuovo gruppo
+                    ensureGroupAccessSettings(normalizedEmail, checkIfAlreadyAligned = false, dryRun = false)
 
                     // Attende che il nuovo gruppo sia propagato e visibile a Google Directory API
                     waitForGroupPropagation(normalizedEmail)

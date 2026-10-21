@@ -56,6 +56,12 @@ class MainViewModel(private val scope: CoroutineScope) {
     var showAbout by mutableStateOf(false)
     var activeSummary by mutableStateOf<SyncSummary?>(null)
 
+    var isEdtVerified by mutableStateOf(false)
+        private set
+
+    var isGoogleVerified by mutableStateOf(false)
+        private set
+
     init {
         val loaded = SettingsManager.loadSettings()
         settings = loaded
@@ -64,6 +70,14 @@ class MainViewModel(private val scope: CoroutineScope) {
     }
 
     fun updateSettings(newSettings: AppSettings) {
+        if (newSettings.edtXmlUrl != settings.edtXmlUrl) {
+            isEdtVerified = false
+            isGoogleVerified = false
+        } else if (newSettings.googleCredentialsPath != settings.googleCredentialsPath ||
+            newSettings.adminEmail != settings.adminEmail
+        ) {
+            isGoogleVerified = false
+        }
         settings = newSettings
         SettingsManager.saveSettings(newSettings)
     }
@@ -78,6 +92,8 @@ class MainViewModel(private val scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 isRunning = true
+                isEdtVerified = false
+                isGoogleVerified = false
                 progressStage = "Verifica URL EDT..."
                 addLog(LogLevel.INFO, "Avvio verifica connessione EDT: ${settings.edtXmlUrl}")
             }
@@ -88,10 +104,12 @@ class MainViewModel(private val scope: CoroutineScope) {
                 isRunning = false
                 progressStage = "Pronto"
                 if (result.isSuccess) {
+                    isEdtVerified = true
                     val info = result.getOrThrow()
                     val detectedDomain = ClassGroupMapper.detectDominantDomain(info.parsedClasses)
                     if (detectedDomain != null) {
-                        updateSettings(settings.copy(schoolDomain = detectedDomain))
+                        settings = settings.copy(schoolDomain = detectedDomain)
+                        SettingsManager.saveSettings(settings)
                         addLog(LogLevel.SUCCESS, "Dominio scuola ricavato dal file EDT: $detectedDomain")
                     }
 
@@ -115,6 +133,7 @@ class MainViewModel(private val scope: CoroutineScope) {
                         }
                     }
                 } else {
+                    isEdtVerified = false
                     addLog(
                         LogLevel.ERROR,
                         "Verifica EDT fallita: ${result.exceptionOrNull()?.message}"
@@ -125,10 +144,11 @@ class MainViewModel(private val scope: CoroutineScope) {
     }
 
     fun testGoogleConnection() {
-        if (isRunning) return
+        if (isRunning || !isEdtVerified) return
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 isRunning = true
+                isGoogleVerified = false
                 progressStage = "Verifica connessione Google Workspace..."
                 addLog(LogLevel.INFO, "Avvio verifica credenziali Google Workspace...")
             }
@@ -172,12 +192,14 @@ class MainViewModel(private val scope: CoroutineScope) {
                 isRunning = false
                 progressStage = "Pronto"
                 if (result.isSuccess) {
+                    isGoogleVerified = true
                     val info = result.getOrThrow()
                     addLog(
                         LogLevel.SUCCESS,
                         "Connessione Google Workspace riuscita: account ${info.authenticatedEmail}, dominio ${info.domain}."
                     )
                 } else {
+                    isGoogleVerified = false
                     addLog(
                         LogLevel.ERROR,
                         "Connessione Google Workspace fallita: ${result.exceptionOrNull()?.message}"
@@ -188,7 +210,7 @@ class MainViewModel(private val scope: CoroutineScope) {
     }
 
     fun startSync(runDryRun: Boolean = false) {
-        if (isRunning) return
+        if (isRunning || !isEdtVerified || !isGoogleVerified) return
 
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
@@ -335,7 +357,7 @@ class MainViewModel(private val scope: CoroutineScope) {
     }
 
     fun exportData(type: ExportType, format: ExportFormat, targetFile: File) {
-        if (isRunning) return
+        if (isRunning || !isGoogleVerified) return
 
         val credResult = SettingsManager.getCredentialsFile(settings.googleCredentialsPath)
         if (credResult.isFailure) {

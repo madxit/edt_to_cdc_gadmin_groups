@@ -199,19 +199,28 @@ Come prescritto dalle direttive di sicurezza, tutte le interazioni con Google Wo
 
 ## 7. Guida all'Uso dell'Applicazione
 
-1. **Avvio:** aprire l'applicazione tramite doppio clic sul pacchetto installato o eseguibile standalone.
-2. **Compilazione iniziale:**
-   - Scheda 1: Inserire l'URL del file XML EDT (pulsante opzionale *Verifica XML* per testare l'URL e visualizzare il dominio ricavato).
-   - Scheda 2: Selezionare il file JSON delle credenziali Google e inserire l'email dell'amministratore DWD (pulsante opzionale *Verifica Connessione*).
-3. **Esecuzione Sincronizzazione (Scheda 3):**
+La procedura dell'interfaccia utente è rigorosamente **guidata e forzata in sequenza**:
+
+1. **Punto 1 - Sorgente Dati EDT (XML):**
+   - Inserire l'URL del file XML EDT esportato dalla scuola.
+   - Premere **Verifica XML**: l'applicazione verifica la disponibilità del file, la correttezza del formato ed estrae automaticamente il dominio istituzionale della scuola.
+   - Una volta superata la verifica, il Punto 1 mostra il badge verde **Verificato** e viene sbloccato il Punto 2.
+
+2. **Punto 2 - Destinazione Google Workspace:**
+   - *(Bloccato finché il Punto 1 non è verificato)*.
+   - Selezionare il file JSON di credenziali con **Sfoglia...** e inserire l'email dell'amministratore Google Workspace (DWD).
+   - Premere **Verifica Connessione**: l'applicazione convalida le credenziali e l'autorizzazione di delega DWD su Google Workspace.
+   - Una volta superata la verifica, compare il badge verde **Verificato**, si sblocca l'esecuzione al Punto 3 e si abilita il pulsante **Esporta** nella barra superiore.
+
+3. **Punto 3 - Esecuzione Sincronizzazione:**
+   - *(Bloccato finché entrambi i Punti 1 e 2 non sono verificati con successo)*.
    - Premere il pulsante **Avvia Sincronizzazione**.
-   - L'applicazione esegue in sequenza automatica:
-     1. **Fase 1/3:** Verifica e analisi della sorgente dati EDT.
-     2. **Fase 2/3:** Verifica delle credenziali e della connessione Google Workspace.
-     3. **Fase 3/3:** Allineamento dei gruppi e dei docenti iscritti (con creazione gruppi mancanti e allineamento dei permessi di accesso).
+   - Viene eseguito l'allineamento dei gruppi e dei docenti iscritti (con creazione dei gruppi mancanti e allineamento dei permessi di accesso).
    - Al termine, una finestra di dialogo mostrerà il riepilogo con le statistiche conclusive (classi elaborate, gruppi creati, docenti aggiunti, docenti rimossi, eventuali anomalie).
-4. **Esportazione Dati:**
+
+4. **Esportazione Dati (Attiva solo dopo la verifica del Punto 2):**
    - Dal pulsante in alto **Esporta**, selezionare la tipologia desiderata (`classe_email_cdc` o `classe_email_cdc_email_partecipanti`) e il formato (**CSV** o **Excel**).
+
 5. **Console e Log:**
    - È possibile attivare lo switch **"Dettagli gruppi nei log"** per visualizzare per esteso l'elenco di tutte le email per ogni gruppo.
    - È possibile copiare i log negli appunti (**Copia log**) o salvarli in un file di testo locale (**Salva su file**).

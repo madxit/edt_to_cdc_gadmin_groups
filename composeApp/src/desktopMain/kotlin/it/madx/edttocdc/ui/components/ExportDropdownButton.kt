@@ -54,7 +54,7 @@ fun ExportDropdownButton(
             onClick = {
                 menuExpanded = !menuExpanded
             },
-            enabled = !viewModel.isRunning
+            enabled = !viewModel.isRunning && viewModel.isGoogleVerified
         ) {
             Icon(
                 Icons.Default.FileDownload,

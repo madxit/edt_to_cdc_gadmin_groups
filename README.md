@@ -25,8 +25,8 @@ Applicazione desktop standalone multiplatform (macOS e Windows) sviluppata in **
 L'applicazione risolve il problema della gestione manuale delle mailing list dei Consigli di Classe nelle scuole:
 - **Zero dipendenze runtime per l'utente finale**: distribuibile come pacchetto nativo `.dmg` / `.app` per macOS, installer `.msi` / `.exe` e archivio standalone `.zip` per Windows. Non richiede l'installazione preventiva di Java, Python o Node.js.
 - **Rilevamento automatico del dominio**: il dominio istituzionale della scuola (es. `scuola.edu.it`) viene ricavato automaticamente analizzando i suffissi email dei docenti estratti dal file XML di EDT.
-- **Formato autorizzato esclusivo**: gestisce unicamente gruppi con indirizzo email nel perimetro protetto:
-  $$\text{cdc\_}\{\text{nome\_classe}\}@\text{dominioscuola.xyz}$$
+- **Formato autorizzato esclusivo**: gestisce unicamente gruppi con indirizzo email nel perimetro protetto:  
+  `cdc_{nome_classe}@dominioscuola.xyz`  
   mentre il nome visualizzato del gruppo viene formattato con la classe in maiuscolo (es. `Consiglio di Classe 1A`).
 - **Nessuna eliminazione di gruppi**: l'applicazione non contiene alcuna funzione o chiamata API per cancellare gruppi Google Workspace. Rimuove esclusivamente i docenti non più presenti dal singolo gruppo CdC e aggiunge i docenti previsti.
 - **Idempotenza e sicurezza**: sincronizzazioni ripetute con gli stessi dati non comportano alcuna modifica superflua. Se le impostazioni di accesso o i membri sono già conformi, le chiamate di scrittura vengono saltate.

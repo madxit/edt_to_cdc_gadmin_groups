@@ -8,7 +8,10 @@ import it.madx.edttocdc.config.AppSettings
 import it.madx.edttocdc.config.SettingsManager
 import it.madx.edttocdc.edt.ClassGroupMapper
 import it.madx.edttocdc.edt.EdtXmlDownloader
+import it.madx.edttocdc.google.ExportFormat
+import it.madx.edttocdc.google.ExportType
 import it.madx.edttocdc.google.GoogleWorkspaceClient
+import it.madx.edttocdc.google.GoogleWorkspaceExporter
 import it.madx.edttocdc.model.LogEntry
 import it.madx.edttocdc.model.LogLevel
 import it.madx.edttocdc.model.SyncSummary
@@ -50,7 +53,14 @@ class MainViewModel(private val scope: CoroutineScope) {
 
     var showEdtHelp by mutableStateOf(false)
     var showGoogleHelp by mutableStateOf(false)
+    var showAbout by mutableStateOf(false)
     var activeSummary by mutableStateOf<SyncSummary?>(null)
+
+    var isEdtVerified by mutableStateOf(false)
+        private set
+
+    var isGoogleVerified by mutableStateOf(false)
+        private set
 
     init {
         val loaded = SettingsManager.loadSettings()
@@ -60,6 +70,14 @@ class MainViewModel(private val scope: CoroutineScope) {
     }
 
     fun updateSettings(newSettings: AppSettings) {
+        if (newSettings.edtXmlUrl != settings.edtXmlUrl) {
+            isEdtVerified = false
+            isGoogleVerified = false
+        } else if (newSettings.googleCredentialsPath != settings.googleCredentialsPath ||
+            newSettings.adminEmail != settings.adminEmail
+        ) {
+            isGoogleVerified = false
+        }
         settings = newSettings
         SettingsManager.saveSettings(newSettings)
     }
@@ -74,6 +92,8 @@ class MainViewModel(private val scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 isRunning = true
+                isEdtVerified = false
+                isGoogleVerified = false
                 progressStage = "Verifica URL EDT..."
                 addLog(LogLevel.INFO, "Avvio verifica connessione EDT: ${settings.edtXmlUrl}")
             }
@@ -84,10 +104,12 @@ class MainViewModel(private val scope: CoroutineScope) {
                 isRunning = false
                 progressStage = "Pronto"
                 if (result.isSuccess) {
+                    isEdtVerified = true
                     val info = result.getOrThrow()
                     val detectedDomain = ClassGroupMapper.detectDominantDomain(info.parsedClasses)
                     if (detectedDomain != null) {
-                        updateSettings(settings.copy(schoolDomain = detectedDomain))
+                        settings = settings.copy(schoolDomain = detectedDomain)
+                        SettingsManager.saveSettings(settings)
                         addLog(LogLevel.SUCCESS, "Dominio scuola ricavato dal file EDT: $detectedDomain")
                     }
 
@@ -111,6 +133,7 @@ class MainViewModel(private val scope: CoroutineScope) {
                         }
                     }
                 } else {
+                    isEdtVerified = false
                     addLog(
                         LogLevel.ERROR,
                         "Verifica EDT fallita: ${result.exceptionOrNull()?.message}"
@@ -121,10 +144,11 @@ class MainViewModel(private val scope: CoroutineScope) {
     }
 
     fun testGoogleConnection() {
-        if (isRunning) return
+        if (isRunning || !isEdtVerified) return
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 isRunning = true
+                isGoogleVerified = false
                 progressStage = "Verifica connessione Google Workspace..."
                 addLog(LogLevel.INFO, "Avvio verifica credenziali Google Workspace...")
             }
@@ -168,12 +192,14 @@ class MainViewModel(private val scope: CoroutineScope) {
                 isRunning = false
                 progressStage = "Pronto"
                 if (result.isSuccess) {
+                    isGoogleVerified = true
                     val info = result.getOrThrow()
                     addLog(
                         LogLevel.SUCCESS,
                         "Connessione Google Workspace riuscita: account ${info.authenticatedEmail}, dominio ${info.domain}."
                     )
                 } else {
+                    isGoogleVerified = false
                     addLog(
                         LogLevel.ERROR,
                         "Connessione Google Workspace fallita: ${result.exceptionOrNull()?.message}"
@@ -184,7 +210,7 @@ class MainViewModel(private val scope: CoroutineScope) {
     }
 
     fun startSync(runDryRun: Boolean = false) {
-        if (isRunning) return
+        if (isRunning || !isEdtVerified || !isGoogleVerified) return
 
         scope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
@@ -326,6 +352,108 @@ class MainViewModel(private val scope: CoroutineScope) {
                 isRunning = false
                 progressStage = "Completato"
                 activeSummary = summary
+            }
+        }
+    }
+
+    fun exportData(type: ExportType, format: ExportFormat, targetFile: File) {
+        if (isRunning || !isGoogleVerified) return
+
+        val credResult = SettingsManager.getCredentialsFile(settings.googleCredentialsPath)
+        if (credResult.isFailure) {
+            addLog(
+                LogLevel.ERROR,
+                "Esportazione impossibile: file credenziali Google non valido - ${credResult.exceptionOrNull()?.message}"
+            )
+            return
+        }
+
+        val effectiveDomain = settings.schoolDomain.ifBlank {
+            settings.adminEmail.substringAfter('@', "").ifBlank { null }
+        }
+        if (effectiveDomain.isNullOrBlank()) {
+            addLog(
+                LogLevel.ERROR,
+                "Esportazione impossibile: specificare il dominio della scuola o l'email dell'amministratore (DWD)."
+            )
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                isRunning = true
+                progressStage = "Avvio esportazione ${type.title} (${format.name})..."
+                progressCurrent = 0
+                progressTotal = 100
+                addLog(LogLevel.INFO, "Avvio esportazione '${type.title}' in formato ${format.name}...")
+            }
+
+            try {
+                val credentialsFile = credResult.getOrThrow()
+                val exporter = GoogleWorkspaceExporter(
+                    credentialsFile = credentialsFile,
+                    domain = effectiveDomain,
+                    adminEmail = settings.adminEmail.ifBlank { null }
+                )
+
+                when (type) {
+                    ExportType.CLASSE_EMAIL_CDC -> {
+                        withContext(Dispatchers.Main) {
+                            progressStage = "Recupero gruppi CdC da Google Workspace..."
+                        }
+                        val items = exporter.fetchClassGroups()
+                        withContext(Dispatchers.Main) {
+                            progressStage = "Scrittura file in corso..."
+                        }
+                        when (format) {
+                            ExportFormat.CSV -> exporter.exportClassGroupsToCsv(targetFile, items)
+                            ExportFormat.EXCEL -> exporter.exportClassGroupsToExcel(targetFile, items)
+                        }
+                        withContext(Dispatchers.Main) {
+                            addLog(
+                                LogLevel.SUCCESS,
+                                "Esportazione '${type.title}' completata con successo: ${items.size} classi/CdC salvate in ${targetFile.name}."
+                            )
+                        }
+                    }
+                    ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI -> {
+                        withContext(Dispatchers.Main) {
+                            progressStage = "Recupero gruppi e partecipanti da Google Workspace..."
+                        }
+                        val items = exporter.fetchClassGroupMembers { current, total, groupEmail ->
+                            scope.launch(Dispatchers.Main) {
+                                progressStage = "Lettura partecipanti gruppo $current/$total ($groupEmail)..."
+                                progressCurrent = current
+                                progressTotal = total
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            progressStage = "Scrittura file in corso..."
+                        }
+                        when (format) {
+                            ExportFormat.CSV -> exporter.exportClassGroupMembersToCsv(targetFile, items)
+                            ExportFormat.EXCEL -> exporter.exportClassGroupMembersToExcel(targetFile, items)
+                        }
+                        withContext(Dispatchers.Main) {
+                            addLog(
+                                LogLevel.SUCCESS,
+                                "Esportazione '${type.title}' completata con successo: ${items.size} righe partecipanti salvate in ${targetFile.name}."
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    addLog(
+                        LogLevel.ERROR,
+                        "Errore durante l'esportazione '${type.title}': ${e.message}"
+                    )
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    isRunning = false
+                    progressStage = "Pronto"
+                }
             }
         }
     }

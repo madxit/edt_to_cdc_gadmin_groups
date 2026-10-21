@@ -1,7 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.gradle.api.attributes.Attribute
 
-val appVersion = "1.0.0"
+val appVersion = "1.0.1"
 val appName = "EdtToCdcSync"
 
 plugins {
@@ -68,6 +68,7 @@ kotlin {
                 implementation(libs.google.auth.library.oauth2.http)
                 implementation(libs.google.api.client)
                 implementation(libs.google.http.client.gson)
+                implementation(libs.apache.poi.ooxml)
             }
         }
         

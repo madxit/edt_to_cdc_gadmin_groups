@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.madx.edttocdc.model.LogEntry
 import it.madx.edttocdc.model.LogLevel
+import it.madx.edttocdc.ui.components.AboutDialog
 import it.madx.edttocdc.ui.components.EdtHelpDialog
+import it.madx.edttocdc.ui.components.ExportDropdownButton
 import it.madx.edttocdc.ui.components.GoogleHelpDialog
 import it.madx.edttocdc.ui.components.SummaryDialog
 import it.madx.edttocdc.ui.theme.*
@@ -78,6 +80,11 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
+                    ExportDropdownButton(
+                        viewModel = viewModel,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+
                     OutlinedButton(
                         onClick = { viewModel.showEdtHelp = true },
                         modifier = Modifier.padding(end = 8.dp)
@@ -89,11 +96,20 @@ fun MainScreen(viewModel: MainViewModel) {
 
                     OutlinedButton(
                         onClick = { viewModel.showGoogleHelp = true },
-                        modifier = Modifier.padding(end = 16.dp)
+                        modifier = Modifier.padding(end = 8.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("Aiuto Google", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.showAbout = true },
+                        modifier = Modifier.padding(end = 16.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("About", fontSize = 12.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -126,11 +142,32 @@ fun MainScreen(viewModel: MainViewModel) {
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(Icons.Default.Description, contentDescription = null, tint = PrimaryBlue)
-                            Text("1. Sorgente Dati EDT (XML)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Description, contentDescription = null, tint = PrimaryBlue)
+                                Text("1. Sorgente Dati EDT (XML)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            }
+                            if (viewModel.isEdtVerified) {
+                                Surface(
+                                    color = SuccessGreen.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
+                                        Text("Verificato", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+                            }
                         }
 
                         OutlinedTextField(
@@ -151,9 +188,13 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onClick = { viewModel.testEdtConnection() },
                                 enabled = !viewModel.isRunning && viewModel.settings.edtXmlUrl.isNotBlank()
                             ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(
+                                    if (viewModel.isEdtVerified) Icons.Default.CheckCircle else Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
                                 Spacer(Modifier.width(6.dp))
-                                Text("Verifica XML")
+                                Text(if (viewModel.isEdtVerified) "Verificato (Riesegui)" else "Verifica XML")
                             }
                         }
                     }
@@ -162,18 +203,76 @@ fun MainScreen(viewModel: MainViewModel) {
                 // 2. SCHEDA CONFIGURAZIONE GOOGLE WORKSPACE
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    colors = if (!viewModel.isEdtVerified) {
+                        CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                        )
+                    } else {
+                        CardDefaults.elevatedCardColors()
+                    }
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = SecondaryTeal)
-                            Text("2. Destinazione Google Workspace", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    if (viewModel.isEdtVerified) Icons.Default.AdminPanelSettings else Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = if (viewModel.isEdtVerified) SecondaryTeal else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "2. Destinazione Google Workspace",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = if (viewModel.isEdtVerified) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            if (viewModel.isGoogleVerified) {
+                                Surface(
+                                    color = SuccessGreen.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
+                                        Text("Verificato", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+                            } else if (!viewModel.isEdtVerified) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        "In attesa del punto 1",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!viewModel.isEdtVerified) {
+                            Text(
+                                "🔒 Completa prima la verifica del file EDT (Punto 1) per sbloccare questo passaggio.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
                         }
 
                         // Selezione file credenziali JSON
@@ -193,7 +292,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 label = { Text("File credenziali JSON") },
                                 placeholder = { Text("Nessun file selezionato") },
                                 modifier = Modifier.weight(1f),
-                                enabled = !viewModel.isRunning
+                                enabled = !viewModel.isRunning && viewModel.isEdtVerified
                             )
 
                             Button(
@@ -207,7 +306,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                         viewModel.updateSettings(viewModel.settings.copy(googleCredentialsPath = fullPath))
                                     }
                                 },
-                                enabled = !viewModel.isRunning
+                                enabled = !viewModel.isRunning && viewModel.isEdtVerified
                             ) {
                                 Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
@@ -233,7 +332,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 if (detected.isNotBlank()) Text("admin@$detected") else Text("admin@scuola.edu.it")
                             },
                             singleLine = true,
-                            enabled = !viewModel.isRunning,
+                            enabled = !viewModel.isRunning && viewModel.isEdtVerified,
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -244,38 +343,85 @@ fun MainScreen(viewModel: MainViewModel) {
                             Button(
                                 onClick = { viewModel.testGoogleConnection() },
                                 enabled = !viewModel.isRunning &&
+                                    viewModel.isEdtVerified &&
                                     viewModel.settings.googleCredentialsPath.isNotBlank() &&
                                     viewModel.settings.adminEmail.isNotBlank()
                             ) {
-                                Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(
+                                    if (viewModel.isGoogleVerified) Icons.Default.CheckCircle else Icons.Default.CloudSync,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
                                 Spacer(Modifier.width(6.dp))
-                                Text("Verifica Connessione")
+                                Text(if (viewModel.isGoogleVerified) "Verificato (Riesegui)" else "Verifica Connessione")
                             }
                         }
                     }
                 }
 
                 // 3. ESECUZIONE SINCRONIZZAZIONE
+                val canStartSync = !viewModel.isRunning && viewModel.isEdtVerified && viewModel.isGoogleVerified
+
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    colors = if (!canStartSync) {
+                        CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                        )
+                    } else {
+                        CardDefaults.elevatedCardColors()
+                    }
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(Icons.Default.PlayCircle, contentDescription = null, tint = PrimaryBlue)
-                            Text("3. Esecuzione Sincronizzazione", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    if (canStartSync) Icons.Default.PlayCircle else Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = if (canStartSync) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "3. Esecuzione Sincronizzazione",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = if (canStartSync) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            if (!canStartSync) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        "In attesa verifiche",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
 
                         Text(
-                            "Avviando la sincronizzazione, l'applicativo eseguirà in sequenza automatica la verifica del file EDT, la verifica della connessione a Google Workspace e l'aggiornamento reale dei gruppi CdC.",
+                            when {
+                                !viewModel.isEdtVerified -> "🔒 Completa con successo la verifica del file EDT (Punto 1) per abilitare la procedura."
+                                !viewModel.isGoogleVerified -> "🔒 Completa con successo la verifica delle credenziali Google Workspace (Punto 2) per abilitare la procedura."
+                                else -> "Tutte le verifiche preliminari sono state superate. Premere il pulsante per avviare la sincronizzazione e l'aggiornamento reale dei gruppi CdC."
+                            },
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (canStartSync) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
                         )
 
                         AnimatedVisibility(visible = viewModel.isRunning) {
@@ -304,10 +450,7 @@ fun MainScreen(viewModel: MainViewModel) {
 
                         Button(
                             onClick = { viewModel.startSync(runDryRun = false) },
-                            enabled = !viewModel.isRunning &&
-                                viewModel.settings.edtXmlUrl.isNotBlank() &&
-                                viewModel.settings.googleCredentialsPath.isNotBlank() &&
-                                viewModel.settings.adminEmail.isNotBlank(),
+                            enabled = canStartSync,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PrimaryBlue
                             ),
@@ -487,6 +630,10 @@ fun MainScreen(viewModel: MainViewModel) {
 
     if (viewModel.showGoogleHelp) {
         GoogleHelpDialog(onDismiss = { viewModel.showGoogleHelp = false })
+    }
+
+    if (viewModel.showAbout) {
+        AboutDialog(onDismiss = { viewModel.showAbout = false })
     }
 
     viewModel.activeSummary?.let { summary ->

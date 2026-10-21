@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import it.madx.edttocdc.model.LogEntry
 import it.madx.edttocdc.model.LogLevel
 import it.madx.edttocdc.ui.components.EdtHelpDialog
+import it.madx.edttocdc.ui.components.ExportDropdownButton
 import it.madx.edttocdc.ui.components.GoogleHelpDialog
 import it.madx.edttocdc.ui.components.SummaryDialog
 import it.madx.edttocdc.ui.theme.*
@@ -78,6 +79,11 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
+                    ExportDropdownButton(
+                        viewModel = viewModel,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+
                     OutlinedButton(
                         onClick = { viewModel.showEdtHelp = true },
                         modifier = Modifier.padding(end = 8.dp)

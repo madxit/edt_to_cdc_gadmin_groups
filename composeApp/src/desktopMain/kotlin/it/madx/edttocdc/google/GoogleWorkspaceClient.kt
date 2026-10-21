@@ -140,69 +140,15 @@ class GoogleWorkspaceClient(
     }
 
     private fun createGoogleCredentials(scopes: List<String>): GoogleCredentials {
-        if (!credentialsFile.exists() || !credentialsFile.canRead()) {
-            throw IOException("File di credenziali Google non accessibile: ${credentialsFile.name}")
-        }
-
-        var credentials = FileInputStream(credentialsFile).use { stream ->
-            GoogleCredentials.fromStream(stream)
-        }
-
-        if (credentials.createScopedRequired()) {
-            credentials = credentials.createScoped(scopes)
-        }
-
-        // Se si utilizzano credenziali di un Service Account, è obbligatoria
-        // la Domain-Wide Delegation (impersonazione dell'amministratore del dominio)
-        if (credentials is ServiceAccountCredentials) {
-            if (adminEmail.isNullOrBlank()) {
-                throw IllegalArgumentException(
-                    "Le credenziali appartengono al Service Account Google Cloud '${credentials.clientEmail}'. " +
-                    "Per accedere alle Google API è necessario specificare l'email di un amministratore Google Workspace abilitato alla delega DWD."
-                )
-            }
-            credentials = credentials.createDelegated(adminEmail.trim())
-        }
-
-        return credentials
+        return GoogleWorkspaceAuthHelper.createGoogleCredentials(credentialsFile, adminEmail, scopes)
     }
 
     private fun initDirectoryService(): Directory {
-        val scopes = listOf(
-            DirectoryScopes.ADMIN_DIRECTORY_GROUP,
-            DirectoryScopes.ADMIN_DIRECTORY_GROUP_MEMBER
-        )
-        val credentials = createGoogleCredentials(scopes)
-        val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
-        val credentialsAdapter = HttpCredentialsAdapter(credentials)
-
-        // Timeout HTTP obbligatori per evitare richieste appese indefinitamente
-        val requestInitializer = HttpRequestInitializer { request ->
-            credentialsAdapter.initialize(request)
-            request.connectTimeout = CONNECT_TIMEOUT_MS
-            request.readTimeout = READ_TIMEOUT_MS
-        }
-
-        return Directory.Builder(httpTransport, jsonFactory, requestInitializer)
-            .setApplicationName("EdtToCdcSync/1.0")
-            .build()
+        return GoogleWorkspaceAuthHelper.createDirectoryService(credentialsFile, adminEmail)
     }
 
     private fun initGroupsSettingsService(): Groupssettings {
-        val scopes = listOf("https://www.googleapis.com/auth/apps.groups.settings")
-        val credentials = createGoogleCredentials(scopes)
-        val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
-        val credentialsAdapter = HttpCredentialsAdapter(credentials)
-
-        val requestInitializer = HttpRequestInitializer { request ->
-            credentialsAdapter.initialize(request)
-            request.connectTimeout = CONNECT_TIMEOUT_MS
-            request.readTimeout = READ_TIMEOUT_MS
-        }
-
-        return Groupssettings.Builder(httpTransport, jsonFactory, requestInitializer)
-            .setApplicationName("EdtToCdcSync/1.0")
-            .build()
+        return GoogleWorkspaceAuthHelper.createGroupsSettingsService(credentialsFile, adminEmail)
     }
 
     // ========================================================================

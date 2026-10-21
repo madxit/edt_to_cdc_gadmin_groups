@@ -68,6 +68,7 @@ kotlin {
                 implementation(libs.google.auth.library.oauth2.http)
                 implementation(libs.google.api.client)
                 implementation(libs.google.http.client.gson)
+                implementation(libs.apache.poi.ooxml)
             }
         }
         

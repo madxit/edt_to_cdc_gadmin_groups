@@ -1,13 +1,24 @@
 package it.madx.edttocdc.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.text.font.FontWeight
@@ -23,8 +34,11 @@ import java.awt.Frame
 import java.io.File
 
 /**
- * Pulsante per la TopAppBar con menu a cascata (cascading dropdown) per l'esportazione dei gruppi CdC
- * e dei relativi membri in formato CSV o Excel (.xlsx).
+ * Menu a discesa multilivello integrato per l'esportazione dei dati Google Workspace.
+ *
+ * Presenta una struttura gerarchica coerente all'interno di un unico pannello elevato:
+ * - Livello 1: Selezione della tipologia di esportazione (2 colonne o 3 colonne).
+ * - Livello 2: Espansione contestuale del formato desiderato (CSV o Excel) al passaggio del mouse o al clic.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -32,14 +46,13 @@ fun ExportDropdownButton(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
-    var mainMenuExpanded by remember { mutableStateOf(false) }
-    var activeSubMenu by remember { mutableStateOf<ExportType?>(null) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var expandedType by remember { mutableStateOf<ExportType?>(ExportType.CLASSE_EMAIL_CDC) }
 
     Box(modifier = modifier) {
         OutlinedButton(
             onClick = {
-                mainMenuExpanded = !mainMenuExpanded
-                activeSubMenu = null
+                menuExpanded = !menuExpanded
             },
             enabled = !viewModel.isRunning
         ) {
@@ -59,24 +72,74 @@ fun ExportDropdownButton(
         }
 
         DropdownMenu(
-            expanded = mainMenuExpanded,
+            expanded = menuExpanded,
             onDismissRequest = {
-                mainMenuExpanded = false
-                activeSubMenu = null
-            }
+                menuExpanded = false
+            },
+            modifier = Modifier.width(340.dp)
         ) {
+            // Intestazione del menu multilivello
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Output,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = PrimaryBlue
+                )
+                Text(
+                    "Esportazione Dati Google Workspace",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
+
             // ================================================================
-            // OPZIONE 1: export classe_email_cdc (2 colonne)
+            // LIVELLO 1 - OPZIONE A: classe_email_cdc (2 colonne)
             // ================================================================
-            Box(
+            val isAExpanded = expandedType == ExportType.CLASSE_EMAIL_CDC
+            val arrowRotationA by animateFloatAsState(targetValue = if (isAExpanded) 90f else 0f)
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onPointerEvent(PointerEventType.Enter) {
-                        activeSubMenu = ExportType.CLASSE_EMAIL_CDC
+                        expandedType = ExportType.CLASSE_EMAIL_CDC
                     }
             ) {
-                DropdownMenuItem(
-                    text = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            expandedType = if (isAExpanded) null else ExportType.CLASSE_EMAIL_CDC
+                        }
+                        .background(
+                            if (isAExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                            else MaterialTheme.colorScheme.surface
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.TableChart,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = PrimaryBlue
+                        )
                         Column {
                             Text(
                                 "classe_email_cdc",
@@ -89,80 +152,107 @@ fun ExportDropdownButton(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.TableChart,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = PrimaryBlue
-                        )
-                    },
-                    trailingIcon = {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    },
-                    onClick = {
-                        activeSubMenu = if (activeSubMenu == ExportType.CLASSE_EMAIL_CDC) null else ExportType.CLASSE_EMAIL_CDC
                     }
-                )
 
-                // Submenu secondo livello (CSV / Excel)
-                DropdownMenu(
-                    expanded = activeSubMenu == ExportType.CLASSE_EMAIL_CDC,
-                    onDismissRequest = { activeSubMenu = null }
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .rotate(arrowRotationA),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // LIVELLO 2 - Formati per Opzione A
+                AnimatedVisibility(
+                    visible = isAExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Esporta in CSV (.csv)", fontSize = 13.sp) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Description,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        onClick = {
-                            mainMenuExpanded = false
-                            activeSubMenu = null
-                            triggerExportDialog(viewModel, ExportType.CLASSE_EMAIL_CDC, ExportFormat.CSV)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Esporta in Excel (.xlsx)", fontSize = 13.sp) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.GridOn,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = SecondaryTeal
-                            )
-                        },
-                        onClick = {
-                            mainMenuExpanded = false
-                            activeSubMenu = null
-                            triggerExportDialog(viewModel, ExportType.CLASSE_EMAIL_CDC, ExportFormat.EXCEL)
-                        }
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 28.dp, end = 12.dp, top = 4.dp, bottom = 6.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                            .padding(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "Scegli formato di esportazione:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+                        )
+
+                        FormatSubMenuItem(
+                            icon = Icons.Default.Description,
+                            iconTint = PrimaryBlue,
+                            title = "Esporta in CSV (.csv)",
+                            subtitle = "Formato testo compatibile Excel / Calc",
+                            onClick = {
+                                menuExpanded = false
+                                triggerExportDialog(viewModel, ExportType.CLASSE_EMAIL_CDC, ExportFormat.CSV)
+                            }
+                        )
+
+                        FormatSubMenuItem(
+                            icon = Icons.Default.GridOn,
+                            iconTint = SecondaryTeal,
+                            title = "Esporta in Excel (.xlsx)",
+                            subtitle = "Cartella di lavoro Microsoft Excel",
+                            onClick = {
+                                menuExpanded = false
+                                triggerExportDialog(viewModel, ExportType.CLASSE_EMAIL_CDC, ExportFormat.EXCEL)
+                            }
+                        )
+                    }
                 }
             }
 
-            HorizontalDivider()
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             // ================================================================
-            // OPZIONE 2: export classe_email_cdc_email_partecipanti (3 colonne)
+            // LIVELLO 1 - OPZIONE B: classe_email_cdc_email_partecipanti (3 colonne)
             // ================================================================
-            Box(
+            val isBExpanded = expandedType == ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI
+            val arrowRotationB by animateFloatAsState(targetValue = if (isBExpanded) 90f else 0f)
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onPointerEvent(PointerEventType.Enter) {
-                        activeSubMenu = ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI
+                        expandedType = ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI
                     }
             ) {
-                DropdownMenuItem(
-                    text = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            expandedType = if (isBExpanded) null else ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI
+                        }
+                        .background(
+                            if (isBExpanded) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
+                            else MaterialTheme.colorScheme.surface
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.Groups,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = SecondaryTeal
+                        )
                         Column {
                             Text(
                                 "classe_email_cdc_email_partecipanti",
@@ -175,65 +265,112 @@ fun ExportDropdownButton(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Groups,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = SecondaryTeal
-                        )
-                    },
-                    trailingIcon = {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    },
-                    onClick = {
-                        activeSubMenu = if (activeSubMenu == ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI) null else ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI
                     }
-                )
 
-                // Submenu secondo livello (CSV / Excel)
-                DropdownMenu(
-                    expanded = activeSubMenu == ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI,
-                    onDismissRequest = { activeSubMenu = null }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Esporta in CSV (.csv)", fontSize = 13.sp) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Description,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        onClick = {
-                            mainMenuExpanded = false
-                            activeSubMenu = null
-                            triggerExportDialog(viewModel, ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI, ExportFormat.CSV)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Esporta in Excel (.xlsx)", fontSize = 13.sp) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.GridOn,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = SecondaryTeal
-                            )
-                        },
-                        onClick = {
-                            mainMenuExpanded = false
-                            activeSubMenu = null
-                            triggerExportDialog(viewModel, ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI, ExportFormat.EXCEL)
-                        }
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .rotate(arrowRotationB),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                // LIVELLO 2 - Formati per Opzione B
+                AnimatedVisibility(
+                    visible = isBExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 28.dp, end = 12.dp, top = 4.dp, bottom = 6.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                            .padding(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "Scegli formato di esportazione:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+                        )
+
+                        FormatSubMenuItem(
+                            icon = Icons.Default.Description,
+                            iconTint = PrimaryBlue,
+                            title = "Esporta in CSV (.csv)",
+                            subtitle = "Formato testo compatibile Excel / Calc",
+                            onClick = {
+                                menuExpanded = false
+                                triggerExportDialog(
+                                    viewModel,
+                                    ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI,
+                                    ExportFormat.CSV
+                                )
+                            }
+                        )
+
+                        FormatSubMenuItem(
+                            icon = Icons.Default.GridOn,
+                            iconTint = SecondaryTeal,
+                            title = "Esporta in Excel (.xlsx)",
+                            subtitle = "Cartella di lavoro Microsoft Excel",
+                            onClick = {
+                                menuExpanded = false
+                                triggerExportDialog(
+                                    viewModel,
+                                    ExportType.CLASSE_EMAIL_CDC_EMAIL_PARTECIPANTI,
+                                    ExportFormat.EXCEL
+                                )
+                            }
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun FormatSubMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: androidx.compose.ui.graphics.Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = iconTint
+        )
+        Column {
+            Text(
+                title,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                subtitle,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

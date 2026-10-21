@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.madx.edttocdc.model.LogEntry
 import it.madx.edttocdc.model.LogLevel
+import it.madx.edttocdc.ui.components.AboutDialog
 import it.madx.edttocdc.ui.components.EdtHelpDialog
 import it.madx.edttocdc.ui.components.ExportDropdownButton
 import it.madx.edttocdc.ui.components.GoogleHelpDialog
@@ -95,11 +96,20 @@ fun MainScreen(viewModel: MainViewModel) {
 
                     OutlinedButton(
                         onClick = { viewModel.showGoogleHelp = true },
-                        modifier = Modifier.padding(end = 16.dp)
+                        modifier = Modifier.padding(end = 8.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("Aiuto Google", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.showAbout = true },
+                        modifier = Modifier.padding(end = 16.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("About", fontSize = 12.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -493,6 +503,10 @@ fun MainScreen(viewModel: MainViewModel) {
 
     if (viewModel.showGoogleHelp) {
         GoogleHelpDialog(onDismiss = { viewModel.showGoogleHelp = false })
+    }
+
+    if (viewModel.showAbout) {
+        AboutDialog(onDismiss = { viewModel.showAbout = false })
     }
 
     viewModel.activeSummary?.let { summary ->

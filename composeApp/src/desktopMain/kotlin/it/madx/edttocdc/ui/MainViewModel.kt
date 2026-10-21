@@ -53,6 +53,7 @@ class MainViewModel(private val scope: CoroutineScope) {
 
     var showEdtHelp by mutableStateOf(false)
     var showGoogleHelp by mutableStateOf(false)
+    var showAbout by mutableStateOf(false)
     var activeSummary by mutableStateOf<SyncSummary?>(null)
 
     init {
